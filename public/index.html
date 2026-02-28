@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Roguelike Golf - Card System</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="game-container">
+            <div class="message" id="message"></div>
+            <canvas id="gameCanvas"></canvas>
+            <div class="stats-row">
+                <div class="strokes-display">Strokes: <span id="strokeCount">0</span></div>
+            </div>
+        </div>
+
+        <div class="card-system">
+            <div class="card-area stroke-area empty" id="strokeArea">
+                <h3>Stroke <span id="strokePower"></span></h3>
+                <div class="card-container" id="strokeContainer"></div>
+            </div>
+
+            <div class="button-row">
+                <button class="btn btn-swing" id="swingBtn">Swing</button>
+                <button class="btn btn-clear" id="clearBtn">Clear Stroke</button>
+                <button class="btn btn-reroll" id="rerollBtn">Reroll</button>
+                <span class="reroll-info" id="rerollInfo">(2 left)</span>
+                <button class="btn btn-end" id="endHoleBtn">New Hole</button>
+            </div>
+
+            <div class="hand-row">
+                <div class="deck-pile draw-pile" id="drawPile">
+                    <div class="pile-visual" id="drawPileVisual">24</div>
+                    <div class="pile-label">Draw</div>
+                    <div class="pile-count" id="drawPileCount">24 cards</div>
+                </div>
+
+                <div class="card-area hand-cards-area">
+                    <h3>Hand</h3>
+                    <div class="card-container" id="handContainer"></div>
+                </div>
+
+                <div class="deck-pile discard-pile" id="discardPile">
+                    <div class="pile-visual" id="discardPileVisual">0</div>
+                    <div class="pile-label">Discard</div>
+                    <div class="pile-count" id="discardPileCount">0 cards</div>
+                </div>
+            </div>
+
+            <div class="card-area debug-panel">
+                <h3>Shot Debug</h3>
+                <div id="debugOutput">Waiting for swing...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/game.js"></script>
+</body>
+</html>
