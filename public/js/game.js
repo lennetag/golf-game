@@ -77,16 +77,22 @@ class CardData {
 }
 
 // ============================================
-// CARD DATABASE - 24 Starter Cards
+// DEFAULT PUTTER (always available)
+// ============================================
+function createPutter() {
+    return new CardData({
+        id: 'putter', name: 'Putter', type: CardType.CLUB,
+        tags: ['club'], baseDistance: 0.12, maxInStroke: 1
+    });
+}
+
+// ============================================
+// CARD DATABASE - 23 Starter Cards
 // ============================================
 function createStarterDeck() {
     const cards = [];
 
-    // CLUBS (4)
-    cards.push(new CardData({
-        id: 'putter', name: 'Putter', type: CardType.CLUB,
-        tags: ['club'], baseDistance: 0.12, maxInStroke: 1
-    }));
+    // CLUBS (3) - Putter is now default, not in deck
     cards.push(new CardData({
         id: 'wedge', name: 'Wedge', type: CardType.CLUB,
         tags: ['club'], baseDistance: 0.22, maxInStroke: 1
@@ -383,18 +389,18 @@ function calculateShot(strokeCards) {
 // ============================================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const MAP_SIZE = 500;
+const MAP_SIZE = 800;
 
 function setupCanvas() {
     const isMobileLandscape = window.innerWidth <= 900 && window.innerHeight <= 500 && window.innerWidth > window.innerHeight;
     
     if (isMobileLandscape) {
-        const canvasSize = window.innerWidth <= 750 ? 240 : 280;
+        const canvasSize = window.innerWidth <= 750 ? 280 : 320;
         canvas.style.width = canvasSize + 'px';
         canvas.style.height = canvasSize + 'px';
     } else {
-        canvas.style.width = '500px';
-        canvas.style.height = '500px';
+        canvas.style.width = '600px';
+        canvas.style.height = '600px';
     }
     
     canvas.width = MAP_SIZE;
@@ -415,13 +421,26 @@ let gameWon = false;
 let rerollsRemaining = 2;
 const MAX_REROLLS = 2;
 
-// Course setup
-const islandA = { x: 60, y: 60, width: 150, height: 130 };
-const islandB = { x: 290, y: 310, width: 150, height: 130 };
-const islandC = { x: 190, y: 170, width: 150, height: 130 };
+// Aiming system
+let aimAngle = 0;
+const AIM_SPEED = 0.03;
+const AIM_SPEED_FAST = 0.08;
 
-const teeBox = { x: islandA.x + islandA.width / 2, y: islandA.y + islandA.height / 2 };
-const flag = { x: islandB.x + islandB.width / 2, y: islandB.y + islandB.height / 2 };
+// Course setup - 8 islands with varied sizes
+const MAP_SIZE_NEW = 800;
+const islands = [
+    { x: 40, y: 40, width: 180, height: 160 },
+    { x: 580, y: 560, width: 180, height: 160 },
+    { x: 300, y: 200, width: 200, height: 180 },
+    { x: 100, y: 350, width: 140, height: 120 },
+    { x: 450, y: 100, width: 160, height: 140 },
+    { x: 250, y: 450, width: 130, height: 110 },
+    { x: 500, y: 350, width: 150, height: 130 },
+    { x: 300, y: 600, width: 400, height: 160 },
+];
+
+const teeBox = { x: islands[0].x + islands[0].width / 2, y: islands[0].y + islands[0].height / 2 };
+const flag = { x: islands[1].x + islands[1].width / 2, y: islands[1].y + islands[1].height / 2 };
 let ball = { x: teeBox.x, y: teeBox.y };
 
 const BALL_RADIUS = 8;
@@ -446,6 +465,274 @@ const drawPileCount = document.getElementById('drawPileCount');
 const discardPile = document.getElementById('discardPile');
 const discardPileVisual = document.getElementById('discardPileVisual');
 const discardPileCount = document.getElementById('discardPileCount');
+
+// Skill Challenge DOM Elements
+const skillChallengeOverlay = document.getElementById('skillChallengeOverlay');
+const skillChallengeModal = document.querySelector('.skill-challenge-modal');
+const skillChallengeTrack = document.getElementById('skillChallengeTrack');
+const skillChallengeTarget = document.getElementById('skillChallengeTarget');
+const skillChallengeMarker = document.getElementById('skillChallengeMarker');
+const skillChallengeBtn = document.getElementById('skillChallengeBtn');
+const skillDifficultyEl = document.getElementById('skillDifficulty');
+
+// ============================================
+// SKILL CHALLENGE SYSTEM
+// ============================================
+const SkillChallenge = {
+    isActive: false,
+    animationId: null,
+    markerPosition: 0,
+    targetPosition: 0,
+    direction: 1,
+    speed: 2,
+    trackWidth: 0,
+    markerWidth: 12,
+    targetWidth: 40,
+    onComplete: null,
+    
+    start(cardCount, onComplete) {
+        this.onComplete = onComplete;
+        this.isActive = true;
+        
+        this.trackWidth = skillChallengeTrack.offsetWidth;
+        this.markerWidth = skillChallengeMarker.offsetWidth;
+        this.targetWidth = skillChallengeTarget.offsetWidth;
+        
+        this.targetPosition = Math.random() * (this.trackWidth - this.targetWidth - 40) + 20;
+        skillChallengeTarget.style.left = this.targetPosition + 'px';
+        
+        const baseSpeed = 2;
+        const speedMultiplier = 1 + (cardCount - 1) * 0.4;
+        this.speed = baseSpeed * speedMultiplier;
+        
+        this.updateDifficultyLabel(cardCount);
+        
+        this.markerPosition = 0;
+        this.direction = 1;
+        skillChallengeMarker.style.left = '0px';
+        
+        skillChallengeModal.classList.remove('result-perfect', 'result-good', 'result-ok', 'result-poor');
+        
+        skillChallengeOverlay.classList.add('active');
+        skillChallengeBtn.disabled = false;
+        
+        this.animate();
+    },
+    
+    updateDifficultyLabel(cardCount) {
+        let difficulty, color;
+        if (cardCount <= 2) {
+            difficulty = 'Easy';
+            color = '#4ade80';
+        } else if (cardCount <= 4) {
+            difficulty = 'Normal';
+            color = '#fbbf24';
+        } else if (cardCount <= 6) {
+            difficulty = 'Hard';
+            color = '#f97316';
+        } else {
+            difficulty = 'Extreme';
+            color = '#ef4444';
+        }
+        skillDifficultyEl.textContent = difficulty;
+        skillDifficultyEl.style.color = color;
+    },
+    
+    animate() {
+        if (!this.isActive) return;
+        
+        this.markerPosition += this.speed * this.direction;
+        
+        const maxPosition = this.trackWidth - this.markerWidth;
+        if (this.markerPosition >= maxPosition) {
+            this.markerPosition = maxPosition;
+            this.direction = -1;
+        } else if (this.markerPosition <= 0) {
+            this.markerPosition = 0;
+            this.direction = 1;
+        }
+        
+        skillChallengeMarker.style.left = this.markerPosition + 'px';
+        
+        this.animationId = requestAnimationFrame(() => this.animate());
+    },
+    
+    stop() {
+        this.isActive = false;
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+        
+        const accuracy = this.calculateAccuracy();
+        
+        this.showResult(accuracy);
+        
+        skillChallengeBtn.disabled = true;
+        
+        setTimeout(() => {
+            skillChallengeOverlay.classList.remove('active');
+            if (this.onComplete) {
+                this.onComplete(accuracy);
+            }
+        }, 800);
+    },
+    
+    calculateAccuracy() {
+        const markerCenter = this.markerPosition + this.markerWidth / 2;
+        const targetCenter = this.targetPosition + this.targetWidth / 2;
+        const distance = Math.abs(markerCenter - targetCenter);
+        
+        const perfectZone = this.targetWidth / 2;
+        
+        if (distance <= perfectZone * 0.3) {
+            return 1.0;
+        }
+        
+        const maxDistance = this.trackWidth / 2;
+        const normalizedDistance = Math.min(distance / maxDistance, 1);
+        const accuracy = 1 - normalizedDistance;
+        
+        return Math.max(0, Math.min(1, accuracy));
+    },
+    
+    showResult(accuracy) {
+        let resultClass;
+        if (accuracy >= 0.95) {
+            resultClass = 'result-perfect';
+        } else if (accuracy >= 0.8) {
+            resultClass = 'result-good';
+        } else if (accuracy >= 0.6) {
+            resultClass = 'result-ok';
+        } else {
+            resultClass = 'result-poor';
+        }
+        skillChallengeModal.classList.add(resultClass);
+    }
+};
+
+skillChallengeBtn.addEventListener('click', () => {
+    if (SkillChallenge.isActive) {
+        SkillChallenge.stop();
+    }
+});
+
+// ============================================
+// AIM CONTROL SYSTEM
+// ============================================
+const aimLeftBtn = document.getElementById('aimLeftBtn');
+const aimRightBtn = document.getElementById('aimRightBtn');
+const aimAngleDisplay = document.getElementById('aimAngleDisplay');
+
+let isAimingLeft = false;
+let isAimingRight = false;
+let aimAnimationId = null;
+
+function updateAimDisplay() {
+    const degrees = Math.round(aimAngle * 180 / Math.PI);
+    aimAngleDisplay.textContent = `${degrees}°`;
+}
+
+function processAiming() {
+    if (isAnimating || gameWon) return;
+    
+    if (isAimingLeft) {
+        aimAngle -= AIM_SPEED;
+    }
+    if (isAimingRight) {
+        aimAngle += AIM_SPEED;
+    }
+    
+    aimAngle = Math.max(-Math.PI, Math.min(Math.PI, aimAngle));
+    
+    updateAimDisplay();
+    draw();
+    
+    if (isAimingLeft || isAimingRight) {
+        aimAnimationId = requestAnimationFrame(processAiming);
+    }
+}
+
+function startAiming(direction) {
+    if (direction === 'left') {
+        isAimingLeft = true;
+    } else {
+        isAimingRight = true;
+    }
+    if (!aimAnimationId) {
+        processAiming();
+    }
+}
+
+function stopAiming(direction) {
+    if (direction === 'left') {
+        isAimingLeft = false;
+    } else {
+        isAimingRight = false;
+    }
+    if (!isAimingLeft && !isAimingRight && aimAnimationId) {
+        cancelAnimationFrame(aimAnimationId);
+        aimAnimationId = null;
+    }
+}
+
+aimLeftBtn.addEventListener('mousedown', () => startAiming('left'));
+aimLeftBtn.addEventListener('mouseup', () => stopAiming('left'));
+aimLeftBtn.addEventListener('mouseleave', () => stopAiming('left'));
+aimLeftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startAiming('left'); });
+aimLeftBtn.addEventListener('touchend', () => stopAiming('left'));
+
+aimRightBtn.addEventListener('mousedown', () => startAiming('right'));
+aimRightBtn.addEventListener('mouseup', () => stopAiming('right'));
+aimRightBtn.addEventListener('mouseleave', () => stopAiming('right'));
+aimRightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startAiming('right'); });
+aimRightBtn.addEventListener('touchend', () => stopAiming('right'));
+
+document.addEventListener('keydown', (e) => {
+    if (isAnimating || gameWon) return;
+    if (e.key === 'ArrowLeft' && !isAimingLeft) {
+        startAiming('left');
+    } else if (e.key === 'ArrowRight' && !isAimingRight) {
+        startAiming('right');
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft') {
+        stopAiming('left');
+    } else if (e.key === 'ArrowRight') {
+        stopAiming('right');
+    }
+});
+
+let touchStartX = 0;
+let isTouchAiming = false;
+
+canvas.addEventListener('touchstart', (e) => {
+    if (isAnimating || gameWon) return;
+    touchStartX = e.touches[0].clientX;
+    isTouchAiming = true;
+});
+
+canvas.addEventListener('touchmove', (e) => {
+    if (!isTouchAiming || isAnimating || gameWon) return;
+    e.preventDefault();
+    
+    const touchX = e.touches[0].clientX;
+    const deltaX = touchX - touchStartX;
+    
+    const sensitivity = 0.003;
+    aimAngle += deltaX * sensitivity;
+    aimAngle = Math.max(-Math.PI, Math.min(Math.PI, aimAngle));
+    
+    touchStartX = touchX;
+    updateAimDisplay();
+    draw();
+});
+
+canvas.addEventListener('touchend', () => {
+    isTouchAiming = false;
+});
 
 // ============================================
 // UI FUNCTIONS
@@ -528,8 +815,15 @@ function onHandCardClicked(card) {
     if (card.type === CardType.CLUB) {
         const existingClub = strokeCards.find(c => c.type === CardType.CLUB);
         if (existingClub) {
-            showMessage('Only one club allowed per stroke!', true);
-            return;
+            if (existingClub.id === 'putter') {
+                const idx = strokeCards.findIndex(c => c.instanceId === existingClub.instanceId);
+                if (idx >= 0) {
+                    strokeCards.splice(idx, 1);
+                }
+            } else {
+                showMessage('Only one club allowed per stroke!', true);
+                return;
+            }
         }
     }
 
@@ -542,10 +836,20 @@ function onHandCardClicked(card) {
 function onStrokeCardClicked(card) {
     if (isAnimating || gameWon) return;
 
+    if (card.id === 'putter' && card.type === CardType.CLUB) {
+        const otherClubs = deck.hand.filter(c => c.type === CardType.CLUB);
+        if (otherClubs.length === 0) {
+            showMessage('Putter is your default club - play another club to replace it.', true);
+            return;
+        }
+    }
+
     const idx = strokeCards.findIndex(c => c.instanceId === card.instanceId);
     if (idx >= 0) {
         strokeCards.splice(idx, 1);
-        deck.addToHand(card);
+        if (card.id !== 'putter' || card.type !== CardType.CLUB) {
+            deck.addToHand(card);
+        }
         renderHand();
         renderStroke();
     }
@@ -556,6 +860,7 @@ function onStrokeCardClicked(card) {
 // ============================================
 function startTurn() {
     strokeCards = [];
+    strokeCards.push(createPutter());
     deck.fillHand();
     renderHand();
     renderStroke();
@@ -574,22 +879,36 @@ function doSwing() {
         return;
     }
 
-    isAnimating = true;
     swingBtn.disabled = true;
     rerollBtn.disabled = true;
+
+    SkillChallenge.start(strokeCards.length, (accuracy) => {
+        executeSwing(shot, accuracy);
+    });
+}
+
+function executeSwing(shot, accuracy) {
+    isAnimating = true;
     strokeCount++;
     strokeCountEl.textContent = strokeCount;
 
-    const dx = flag.x - ball.x;
-    const dy = flag.y - ball.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const dirX = dx / dist;
-    const dirY = dy / dist;
+    const MAX_VARIANCE = 0.20;
+    const inaccuracy = 1 - accuracy;
+    const distanceVariance = (Math.random() * 2 - 1) * inaccuracy * MAX_VARIANCE;
+    const lateralVariance = (Math.random() * 2 - 1) * inaccuracy * MAX_VARIANCE * MAP_SIZE;
+
+    const baseAngle = Math.atan2(flag.y - ball.y, flag.x - ball.x);
+    const finalAngle = baseAngle + aimAngle;
+    
+    const dirX = Math.cos(finalAngle);
+    const dirY = Math.sin(finalAngle);
 
     let travelDist = shot.finalDistance * MAP_SIZE;
     if (shot.hasLongRun) {
         travelDist *= (1 + LONG_RUN_BONUS);
     }
+    
+    travelDist *= (1 + distanceVariance);
 
     const perpX = -dirY;
     const perpY = dirX;
@@ -602,8 +921,24 @@ function doSwing() {
         lateralOffset = -SHAPE_OFFSET;
     }
     
+    lateralOffset += lateralVariance;
+    
     const targetX = ball.x + dirX * travelDist + perpX * lateralOffset;
     const targetY = ball.y + dirY * travelDist + perpY * lateralOffset;
+
+    const accuracyPercent = (accuracy * 100).toFixed(0);
+    let accuracyLabel;
+    if (accuracy >= 0.95) {
+        accuracyLabel = 'Perfect!';
+    } else if (accuracy >= 0.8) {
+        accuracyLabel = 'Good';
+    } else if (accuracy >= 0.6) {
+        accuracyLabel = 'OK';
+    } else {
+        accuracyLabel = 'Poor';
+    }
+    
+    debugOutput.innerHTML = shot.getDebugString() + `\n<span class="${accuracy >= 0.8 ? 'shot-valid' : 'shot-invalid'}">Timing: ${accuracyLabel} (${accuracyPercent}%)</span>`;
 
     const startX = ball.x;
     const startY = ball.y;
@@ -727,6 +1062,8 @@ function newHole() {
     gameWon = false;
     isAnimating = false;
     rerollsRemaining = MAX_REROLLS;
+    aimAngle = 0;
+    updateAimDisplay();
 
     deck.initialize(createStarterDeck());
     strokeCards = [];
@@ -831,11 +1168,11 @@ function drawAimingLine() {
     const shot = calculateShot(strokeCards);
     if (!shot.isValid) return;
 
-    const dx = flag.x - ball.x;
-    const dy = flag.y - ball.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const dirX = dx / dist;
-    const dirY = dy / dist;
+    const baseAngle = Math.atan2(flag.y - ball.y, flag.x - ball.x);
+    const finalAngle = baseAngle + aimAngle;
+    
+    const dirX = Math.cos(finalAngle);
+    const dirY = Math.sin(finalAngle);
     
     const perpX = -dirY;
     const perpY = dirX;
@@ -914,9 +1251,9 @@ function drawBall(scale = 1.0) {
 function draw(ballScale = 1.0) {
     ctx.clearRect(0, 0, MAP_SIZE, MAP_SIZE);
     drawWater();
-    drawIsland(islandA);
-    drawIsland(islandC);
-    drawIsland(islandB);
+    for (const island of islands) {
+        drawIsland(island);
+    }
     drawTeeBox();
     drawFlag();
     drawAimingLine();
@@ -931,9 +1268,12 @@ function isInWater(x, y) {
         const ry = island.height / 2;
         return ((px - cx) ** 2 / rx ** 2 + (py - cy) ** 2 / ry ** 2) <= 1;
     }
-    return !pointInEllipse(x, y, islandA) && 
-           !pointInEllipse(x, y, islandB) && 
-           !pointInEllipse(x, y, islandC);
+    for (const island of islands) {
+        if (pointInEllipse(x, y, island)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // ============================================

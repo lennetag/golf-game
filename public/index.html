@@ -22,6 +22,12 @@
                 <div class="card-container" id="strokeContainer"></div>
             </div>
 
+            <div class="aim-controls">
+                <button class="btn btn-aim" id="aimLeftBtn">◀ Aim Left</button>
+                <span class="aim-indicator">Aim: <span id="aimAngleDisplay">0°</span></span>
+                <button class="btn btn-aim" id="aimRightBtn">Aim Right ▶</button>
+            </div>
+
             <div class="button-row">
                 <button class="btn btn-swing" id="swingBtn">Swing</button>
                 <button class="btn btn-clear" id="clearBtn">Clear Stroke</button>
@@ -53,6 +59,22 @@
                 <h3>Shot Debug</h3>
                 <div id="debugOutput">Waiting for swing...</div>
             </div>
+        </div>
+    </div>
+
+    <!-- Skill Challenge Modal -->
+    <div class="skill-challenge-overlay" id="skillChallengeOverlay">
+        <div class="skill-challenge-modal">
+            <h2>Timing Challenge</h2>
+            <p class="skill-challenge-hint">Click when the marker hits the target!</p>
+            <div class="skill-challenge-track" id="skillChallengeTrack">
+                <div class="skill-challenge-target" id="skillChallengeTarget"></div>
+                <div class="skill-challenge-marker" id="skillChallengeMarker"></div>
+            </div>
+            <div class="skill-challenge-info">
+                <span class="difficulty-label">Difficulty: <span id="skillDifficulty">Normal</span></span>
+            </div>
+            <button class="btn btn-swing skill-challenge-btn" id="skillChallengeBtn">SWING!</button>
         </div>
     </div>
 
