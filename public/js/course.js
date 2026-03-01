@@ -2,20 +2,30 @@
 // PROCEDURAL HOLE GENERATOR
 // ============================================
 const TerrainType = {
+    GREEN: 'green',
     FAIRWAY: 'fairway',
     ROUGH: 'rough',
     SAND: 'sand',
-    GRASS_OOB: 'grass_oob'
+    WATER: 'water'
+};
+
+const HoleStyle = {
+    ISLAND: 'island',
+    PARKLAND: 'parkland'
 };
 
 class HoleGenerator {
     constructor(mapSize) {
         this.mapSize = mapSize;
-        this.islands = [];
+        this.green = null;
+        this.fairways = [];
+        this.roughs = [];
         this.sandPits = [];
-        this.grassPatches = [];
+        this.waterFeatures = [];
+        this.trees = [];
         this.teeBox = { x: 0, y: 0 };
         this.flag = { x: 0, y: 0 };
+        this.holeStyle = HoleStyle.PARKLAND;
     }
 
     random(min, max) {
@@ -24,6 +34,14 @@ class HoleGenerator {
 
     randomInt(min, max) {
         return Math.floor(this.random(min, max + 1));
+    }
+
+    lerp(a, b, t) {
+        return a + (b - a) * t;
+    }
+
+    smoothstep(t) {
+        return t * t * (3 - 2 * t);
     }
 
     generateBlobPoints(cx, cy, baseRadius, variance, pointCount) {
@@ -40,78 +58,20 @@ class HoleGenerator {
         return points;
     }
 
-    generateElongatedShape(cx, cy, length, width, angle, waviness = 0.2) {
+    generateKidneyShape(cx, cy, size, angle, indent = 0.35) {
         const points = [];
-        const segments = 16;
-        
-        for (let i = 0; i <= segments; i++) {
-            const t = i / segments;
-            const localX = (t - 0.5) * length;
-            const waveOffset = Math.sin(t * Math.PI * 3) * width * waviness;
-            const localY = width / 2 + waveOffset;
-            
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            points.push({
-                x: cx + localX * cos - localY * sin,
-                y: cy + localX * sin + localY * cos
-            });
-        }
-        
-        for (let i = segments; i >= 0; i--) {
-            const t = i / segments;
-            const localX = (t - 0.5) * length;
-            const waveOffset = Math.sin(t * Math.PI * 3) * width * waviness;
-            const localY = -(width / 2 + waveOffset);
-            
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            points.push({
-                x: cx + localX * cos - localY * sin,
-                y: cy + localX * sin + localY * cos
-            });
-        }
-        
-        return points;
-    }
-
-    generateOrganicIsland(cx, cy, size, type = 'blob') {
-        let points;
-        const rotation = this.random(0, Math.PI * 2);
-        
-        switch (type) {
-            case 'elongated':
-                const length = size * this.random(2, 3.5);
-                const width = size * this.random(0.4, 0.8);
-                points = this.generateElongatedShape(cx, cy, length, width, rotation, this.random(0.1, 0.3));
-                break;
-            case 'kidney':
-                points = this.generateKidneyShape(cx, cy, size, rotation);
-                break;
-            case 'crescent':
-                points = this.generateCrescentShape(cx, cy, size, rotation);
-                break;
-            case 'blob':
-            default:
-                points = this.generateBlobPoints(cx, cy, size, 0.3, this.randomInt(8, 14));
-                break;
-        }
-        
-        return { cx, cy, points, size, type };
-    }
-
-    generateKidneyShape(cx, cy, size, angle) {
-        const points = [];
-        const segments = 24;
+        const segments = 32;
         
         for (let i = 0; i < segments; i++) {
             const t = (i / segments) * Math.PI * 2;
-            let r = size * (1 + 0.4 * Math.cos(t * 2));
-            const indent = Math.max(0, Math.cos(t - Math.PI / 2)) * size * 0.3;
-            r -= indent;
+            let r = size * (1 + 0.3 * Math.cos(t * 2));
+            const indentAmount = Math.max(0, Math.sin(t - Math.PI * 0.5)) * size * indent;
+            r -= indentAmount;
+            r += this.random(-size * 0.05, size * 0.05);
             
+            const stretch = 0.65 + this.random(-0.05, 0.05);
             const localX = Math.cos(t) * r;
-            const localY = Math.sin(t) * r * 0.7;
+            const localY = Math.sin(t) * r * stretch;
             
             const cos = Math.cos(angle);
             const sin = Math.sin(angle);
@@ -124,78 +84,147 @@ class HoleGenerator {
         return points;
     }
 
-    generateCrescentShape(cx, cy, size, angle) {
+    generateOrganicShape(cx, cy, size, angle, complexity = 3) {
         const points = [];
-        const segments = 20;
+        const segments = 28 + complexity * 4;
+        const frequencies = [];
         
-        for (let i = 0; i <= segments; i++) {
-            const t = (i / segments) * Math.PI;
-            const localX = Math.cos(t) * size * 1.2;
-            const localY = Math.sin(t) * size * 0.8;
+        for (let f = 0; f < complexity; f++) {
+            frequencies.push({
+                freq: 2 + f * 2,
+                amp: this.random(0.1, 0.25) / (f + 1),
+                phase: this.random(0, Math.PI * 2)
+            });
+        }
+        
+        for (let i = 0; i < segments; i++) {
+            const t = (i / segments) * Math.PI * 2;
+            let r = size;
+            
+            for (const freq of frequencies) {
+                r += Math.sin(t * freq.freq + freq.phase) * size * freq.amp;
+            }
+            
+            const stretch = this.random(0.7, 0.9);
+            const localX = Math.cos(t) * r;
+            const localY = Math.sin(t) * r * stretch;
             
             const cos = Math.cos(angle);
             const sin = Math.sin(angle);
             points.push({
                 x: cx + localX * cos - localY * sin,
                 y: cy + localX * sin + localY * cos
+            });
+        }
+        
+        return points;
+    }
+
+    generateFairwayPath(start, end, width, waviness = 0.3) {
+        const points = [];
+        const segments = 24;
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+        
+        const wavePhase = this.random(0, Math.PI * 2);
+        const waveFreq = this.random(2, 4);
+        
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const easeT = this.smoothstep(t);
+            
+            const baseX = this.lerp(start.x, end.x, easeT);
+            const baseY = this.lerp(start.y, end.y, easeT);
+            
+            const waveOffset = Math.sin(t * Math.PI * waveFreq + wavePhase) * width * waviness;
+            const widthAtPoint = width * (0.8 + 0.4 * Math.sin(t * Math.PI));
+            
+            const perpX = -Math.sin(angle);
+            const perpY = Math.cos(angle);
+            
+            points.push({
+                x: baseX + perpX * (widthAtPoint / 2 + waveOffset),
+                y: baseY + perpY * (widthAtPoint / 2 + waveOffset)
             });
         }
         
         for (let i = segments; i >= 0; i--) {
-            const t = (i / segments) * Math.PI;
-            const innerScale = 0.5;
-            const localX = Math.cos(t) * size * 1.2 * innerScale + size * 0.3;
-            const localY = Math.sin(t) * size * 0.5;
+            const t = i / segments;
+            const easeT = this.smoothstep(t);
             
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
+            const baseX = this.lerp(start.x, end.x, easeT);
+            const baseY = this.lerp(start.y, end.y, easeT);
+            
+            const waveOffset = Math.sin(t * Math.PI * waveFreq + wavePhase) * width * waviness;
+            const widthAtPoint = width * (0.8 + 0.4 * Math.sin(t * Math.PI));
+            
+            const perpX = -Math.sin(angle);
+            const perpY = Math.cos(angle);
+            
             points.push({
-                x: cx + localX * cos - localY * sin,
-                y: cy + localX * sin + localY * cos
+                x: baseX - perpX * (widthAtPoint / 2 - waveOffset * 0.5),
+                y: baseY - perpY * (widthAtPoint / 2 - waveOffset * 0.5)
             });
         }
         
         return points;
     }
 
-    generateSandPit(cx, cy, size) {
-        const points = this.generateBlobPoints(cx, cy, size, 0.25, this.randomInt(6, 10));
-        return { cx, cy, points, size };
-    }
-
-    generateGrassPatch(cx, cy, size) {
-        const type = this.randomInt(0, 2);
+    generateGreen(cx, cy, size) {
+        const angle = this.random(0, Math.PI * 2);
+        const shapeType = this.randomInt(0, 2);
         let points;
-        const rotation = this.random(0, Math.PI * 2);
         
-        if (type === 0) {
-            points = this.generateBlobPoints(cx, cy, size, 0.35, this.randomInt(6, 10));
+        if (shapeType === 0) {
+            points = this.generateKidneyShape(cx, cy, size, angle, this.random(0.2, 0.4));
+        } else if (shapeType === 1) {
+            points = this.generateOrganicShape(cx, cy, size, angle, 2);
         } else {
-            const length = size * this.random(1.5, 2.5);
-            const width = size * this.random(0.5, 0.8);
-            points = this.generateElongatedShape(cx, cy, length, width, rotation, 0.15);
+            points = this.generateBlobPoints(cx, cy, size, 0.2, this.randomInt(10, 14));
         }
         
-        return { cx, cy, points, size };
+        return { cx, cy, points, size, type: TerrainType.GREEN };
     }
 
-    generateFairwayBridge(island1, island2) {
-        const cx = (island1.cx + island2.cx) / 2;
-        const cy = (island1.cy + island2.cy) / 2;
-        const dx = island2.cx - island1.cx;
-        const dy = island2.cy - island1.cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const angle = Math.atan2(dy, dx);
-        
-        const length = dist * 0.6;
-        const width = this.random(25, 45);
-        const points = this.generateElongatedShape(cx, cy, length, width, angle, 0.05);
-        
-        return { cx, cy, points, size: width, type: 'bridge' };
+    generateRough(cx, cy, size) {
+        const angle = this.random(0, Math.PI * 2);
+        const points = this.generateOrganicShape(cx, cy, size, angle, this.randomInt(2, 4));
+        return { cx, cy, points, size, type: TerrainType.ROUGH };
     }
 
-    islandContainsPoint(island, px, py) {
-        const points = island.points;
+    generateSandPit(cx, cy, size) {
+        const angle = this.random(0, Math.PI * 2);
+        const shapeType = this.randomInt(0, 2);
+        let points;
+        
+        if (shapeType === 0) {
+            points = this.generateKidneyShape(cx, cy, size, angle, this.random(0.15, 0.3));
+        } else {
+            points = this.generateBlobPoints(cx, cy, size, 0.25, this.randomInt(8, 12));
+        }
+        
+        return { cx, cy, points, size, type: TerrainType.SAND };
+    }
+
+    generateWaterFeature(cx, cy, size) {
+        const angle = this.random(0, Math.PI * 2);
+        const points = this.generateOrganicShape(cx, cy, size, angle, this.randomInt(2, 4));
+        return { cx, cy, points, size, type: TerrainType.WATER };
+    }
+
+    generateTree(x, y) {
+        const size = this.random(8, 18);
+        const type = this.randomInt(0, 2);
+        return { x, y, size, type };
+    }
+
+    distanceBetween(p1, p2) {
+        return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+    }
+
+    pointInPolygon(px, py, points) {
         let inside = false;
         for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
             const xi = points[i].x, yi = points[i].y;
@@ -207,193 +236,329 @@ class HoleGenerator {
         return inside;
     }
 
-    distanceBetween(p1, p2) {
-        return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
-    }
-
-    generateHole() {
-        this.islands = [];
+    generateIslandHole() {
+        this.fairways = [];
+        this.roughs = [];
         this.sandPits = [];
-        this.grassPatches = [];
+        this.waterFeatures = [];
+        this.trees = [];
+        this.holeStyle = HoleStyle.ISLAND;
 
-        const holeDistance = this.random(0.5, 0.85);
-        const numIslands = this.randomInt(4, 10);
-        
+        const holeDistance = this.random(0.5, 0.8);
         const teeAngle = this.random(0, Math.PI * 2);
         const centerX = this.mapSize / 2;
         const centerY = this.mapSize / 2;
         
-        const teeX = centerX + Math.cos(teeAngle) * (this.mapSize * 0.3);
-        const teeY = centerY + Math.sin(teeAngle) * (this.mapSize * 0.3);
+        const teeX = centerX + Math.cos(teeAngle) * (this.mapSize * 0.32);
+        const teeY = centerY + Math.sin(teeAngle) * (this.mapSize * 0.32);
         
-        const flagAngle = teeAngle + Math.PI + this.random(-0.5, 0.5);
-        const flagDistance = this.mapSize * holeDistance * 0.5;
-        const flagX = centerX + Math.cos(flagAngle) * flagDistance * this.random(0.7, 1.0);
-        const flagY = centerY + Math.sin(flagAngle) * flagDistance * this.random(0.7, 1.0);
+        const flagAngle = teeAngle + Math.PI + this.random(-0.4, 0.4);
+        const flagDistance = this.mapSize * holeDistance * 0.45;
+        const flagX = centerX + Math.cos(flagAngle) * flagDistance;
+        const flagY = centerY + Math.sin(flagAngle) * flagDistance;
 
-        const clampedTeeX = Math.max(100, Math.min(this.mapSize - 100, teeX));
-        const clampedTeeY = Math.max(100, Math.min(this.mapSize - 100, teeY));
-        const clampedFlagX = Math.max(100, Math.min(this.mapSize - 100, flagX));
-        const clampedFlagY = Math.max(100, Math.min(this.mapSize - 100, flagY));
+        const margin = 90;
+        this.teeBox = { 
+            x: Math.max(margin, Math.min(this.mapSize - margin, teeX)),
+            y: Math.max(margin, Math.min(this.mapSize - margin, teeY))
+        };
+        this.flag = { 
+            x: Math.max(margin, Math.min(this.mapSize - margin, flagX)),
+            y: Math.max(margin, Math.min(this.mapSize - margin, flagY))
+        };
 
-        this.teeBox = { x: clampedTeeX, y: clampedTeeY };
-        this.flag = { x: clampedFlagX, y: clampedFlagY };
+        const greenSize = this.random(55, 75);
+        this.green = this.generateGreen(this.flag.x, this.flag.y, greenSize);
 
-        const teeIslandSize = this.random(70, 100);
-        const teeIslandType = Math.random() < 0.3 ? 'elongated' : 'blob';
-        this.islands.push(this.generateOrganicIsland(this.teeBox.x, this.teeBox.y, teeIslandSize, teeIslandType));
+        const roughAroundGreen = this.generateRough(
+            this.flag.x, 
+            this.flag.y, 
+            greenSize * this.random(1.8, 2.2)
+        );
+        this.roughs.push(roughAroundGreen);
 
-        const flagIslandSize = this.random(80, 120);
-        const flagIslandType = this.randomInt(0, 3) === 0 ? 'kidney' : 'blob';
-        this.islands.push(this.generateOrganicIsland(this.flag.x, this.flag.y, flagIslandSize, flagIslandType));
+        const teeRough = this.generateRough(
+            this.teeBox.x,
+            this.teeBox.y,
+            this.random(70, 100)
+        );
+        this.roughs.push(teeRough);
 
-        const pathPoints = [];
-        const pathSegments = this.randomInt(2, 4);
-        for (let i = 0; i <= pathSegments; i++) {
-            const t = i / pathSegments;
-            const baseX = this.teeBox.x + (this.flag.x - this.teeBox.x) * t;
-            const baseY = this.teeBox.y + (this.flag.y - this.teeBox.y) * t;
-            const perpX = -(this.flag.y - this.teeBox.y);
-            const perpY = this.flag.x - this.teeBox.x;
-            const perpLen = Math.sqrt(perpX * perpX + perpY * perpY);
-            const offset = (i === 0 || i === pathSegments) ? 0 : this.random(-100, 100);
-            pathPoints.push({
-                x: baseX + (perpX / perpLen) * offset,
-                y: baseY + (perpY / perpLen) * offset
+        const fairwayWidth = this.random(45, 70);
+        const midX = (this.teeBox.x + this.flag.x) / 2 + this.random(-60, 60);
+        const midY = (this.teeBox.y + this.flag.y) / 2 + this.random(-60, 60);
+
+        const fairway1 = {
+            cx: (this.teeBox.x + midX) / 2,
+            cy: (this.teeBox.y + midY) / 2,
+            points: this.generateFairwayPath(this.teeBox, { x: midX, y: midY }, fairwayWidth, 0.25),
+            type: TerrainType.FAIRWAY
+        };
+        this.fairways.push(fairway1);
+
+        const fairway2 = {
+            cx: (midX + this.flag.x) / 2,
+            cy: (midY + this.flag.y) / 2,
+            points: this.generateFairwayPath({ x: midX, y: midY }, this.flag, fairwayWidth * 0.9, 0.2),
+            type: TerrainType.FAIRWAY
+        };
+        this.fairways.push(fairway2);
+
+        const roughWidth = fairwayWidth * 1.6;
+        const rough1 = {
+            cx: fairway1.cx,
+            cy: fairway1.cy,
+            points: this.generateFairwayPath(this.teeBox, { x: midX, y: midY }, roughWidth, 0.3),
+            type: TerrainType.ROUGH
+        };
+        this.roughs.unshift(rough1);
+
+        const rough2 = {
+            cx: fairway2.cx,
+            cy: fairway2.cy,
+            points: this.generateFairwayPath({ x: midX, y: midY }, this.flag, roughWidth * 0.95, 0.25),
+            type: TerrainType.ROUGH
+        };
+        this.roughs.unshift(rough2);
+
+        const numBunkers = this.randomInt(2, 4);
+        for (let i = 0; i < numBunkers; i++) {
+            const t = this.random(0.3, 0.9);
+            const pathX = this.lerp(this.teeBox.x, this.flag.x, t);
+            const pathY = this.lerp(this.teeBox.y, this.flag.y, t);
+            
+            const angle = Math.atan2(this.flag.y - this.teeBox.y, this.flag.x - this.teeBox.x) + Math.PI / 2;
+            const offset = this.random(25, 55) * (Math.random() < 0.5 ? 1 : -1);
+            
+            const bunkerX = pathX + Math.cos(angle) * offset;
+            const bunkerY = pathY + Math.sin(angle) * offset;
+            
+            if (this.distanceBetween({ x: bunkerX, y: bunkerY }, this.flag) > 25 &&
+                this.distanceBetween({ x: bunkerX, y: bunkerY }, this.teeBox) > 40) {
+                const bunkerSize = this.random(18, 32);
+                this.sandPits.push(this.generateSandPit(bunkerX, bunkerY, bunkerSize));
+            }
+        }
+
+        const greenBunkers = this.randomInt(1, 2);
+        for (let i = 0; i < greenBunkers; i++) {
+            const angle = this.random(0, Math.PI * 2);
+            const dist = greenSize + this.random(15, 30);
+            const bx = this.flag.x + Math.cos(angle) * dist;
+            const by = this.flag.y + Math.sin(angle) * dist;
+            this.sandPits.push(this.generateSandPit(bx, by, this.random(15, 25)));
+        }
+    }
+
+    generateParklandHole() {
+        this.fairways = [];
+        this.roughs = [];
+        this.sandPits = [];
+        this.waterFeatures = [];
+        this.trees = [];
+        this.holeStyle = HoleStyle.PARKLAND;
+
+        const holeDistance = this.random(0.55, 0.85);
+        const teeAngle = this.random(0, Math.PI * 2);
+        const centerX = this.mapSize / 2;
+        const centerY = this.mapSize / 2;
+        
+        const teeX = centerX + Math.cos(teeAngle) * (this.mapSize * 0.35);
+        const teeY = centerY + Math.sin(teeAngle) * (this.mapSize * 0.35);
+        
+        const flagAngle = teeAngle + Math.PI + this.random(-0.35, 0.35);
+        const flagDistance = this.mapSize * holeDistance * 0.42;
+        const flagX = centerX + Math.cos(flagAngle) * flagDistance;
+        const flagY = centerY + Math.sin(flagAngle) * flagDistance;
+
+        const margin = 80;
+        this.teeBox = { 
+            x: Math.max(margin, Math.min(this.mapSize - margin, teeX)),
+            y: Math.max(margin, Math.min(this.mapSize - margin, teeY))
+        };
+        this.flag = { 
+            x: Math.max(margin, Math.min(this.mapSize - margin, flagX)),
+            y: Math.max(margin, Math.min(this.mapSize - margin, flagY))
+        };
+
+        const baseRough = {
+            cx: centerX,
+            cy: centerY,
+            points: this.generateOrganicShape(centerX, centerY, this.mapSize * 0.55, 0, 4),
+            type: TerrainType.ROUGH,
+            isBase: true
+        };
+        this.roughs.push(baseRough);
+
+        const greenSize = this.random(50, 70);
+        this.green = this.generateGreen(this.flag.x, this.flag.y, greenSize);
+
+        const numSegments = this.randomInt(2, 3);
+        const waypoints = [this.teeBox];
+        
+        for (let i = 1; i < numSegments; i++) {
+            const t = i / numSegments;
+            const baseX = this.lerp(this.teeBox.x, this.flag.x, t);
+            const baseY = this.lerp(this.teeBox.y, this.flag.y, t);
+            const perpAngle = Math.atan2(this.flag.y - this.teeBox.y, this.flag.x - this.teeBox.x) + Math.PI / 2;
+            const offset = this.random(-80, 80);
+            waypoints.push({
+                x: baseX + Math.cos(perpAngle) * offset,
+                y: baseY + Math.sin(perpAngle) * offset
             });
         }
+        waypoints.push(this.flag);
 
-        const islandTypes = ['blob', 'blob', 'elongated', 'elongated', 'kidney', 'crescent'];
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            const width = this.random(50, 75) * (i === waypoints.length - 2 ? 0.85 : 1);
+            const fairway = {
+                cx: (waypoints[i].x + waypoints[i + 1].x) / 2,
+                cy: (waypoints[i].y + waypoints[i + 1].y) / 2,
+                points: this.generateFairwayPath(waypoints[i], waypoints[i + 1], width, 0.2),
+                type: TerrainType.FAIRWAY
+            };
+            this.fairways.push(fairway);
+        }
+
+        if (Math.random() < 0.6) {
+            const waterPos = this.random(0.35, 0.65);
+            const pathX = this.lerp(this.teeBox.x, this.flag.x, waterPos);
+            const pathY = this.lerp(this.teeBox.y, this.flag.y, waterPos);
+            const perpAngle = Math.atan2(this.flag.y - this.teeBox.y, this.flag.x - this.teeBox.x) + Math.PI / 2;
+            const offset = this.random(70, 120) * (Math.random() < 0.5 ? 1 : -1);
+            
+            const waterX = pathX + Math.cos(perpAngle) * offset;
+            const waterY = pathY + Math.sin(perpAngle) * offset;
+            const waterSize = this.random(45, 80);
+            
+            if (waterX > 60 && waterX < this.mapSize - 60 && 
+                waterY > 60 && waterY < this.mapSize - 60) {
+                this.waterFeatures.push(this.generateWaterFeature(waterX, waterY, waterSize));
+            }
+        }
+
+        const numBunkers = this.randomInt(3, 6);
+        for (let i = 0; i < numBunkers; i++) {
+            let placed = false;
+            let attempts = 0;
+            
+            while (!placed && attempts < 20) {
+                attempts++;
+                const t = this.random(0.2, 0.95);
+                const pathX = this.lerp(this.teeBox.x, this.flag.x, t);
+                const pathY = this.lerp(this.teeBox.y, this.flag.y, t);
+                
+                const angle = Math.atan2(this.flag.y - this.teeBox.y, this.flag.x - this.teeBox.x) + Math.PI / 2;
+                const offset = this.random(30, 70) * (Math.random() < 0.5 ? 1 : -1);
+                
+                const bunkerX = pathX + Math.cos(angle) * offset;
+                const bunkerY = pathY + Math.sin(angle) * offset;
+                
+                let valid = true;
+                if (this.distanceBetween({ x: bunkerX, y: bunkerY }, this.flag) < 20) valid = false;
+                if (this.distanceBetween({ x: bunkerX, y: bunkerY }, this.teeBox) < 35) valid = false;
+                
+                for (const water of this.waterFeatures) {
+                    if (this.distanceBetween({ x: bunkerX, y: bunkerY }, { x: water.cx, y: water.cy }) < water.size + 20) {
+                        valid = false;
+                        break;
+                    }
+                }
+                
+                for (const pit of this.sandPits) {
+                    if (this.distanceBetween({ x: bunkerX, y: bunkerY }, { x: pit.cx, y: pit.cy }) < pit.size + 15) {
+                        valid = false;
+                        break;
+                    }
+                }
+                
+                if (valid) {
+                    const bunkerSize = this.random(18, 35);
+                    this.sandPits.push(this.generateSandPit(bunkerX, bunkerY, bunkerSize));
+                    placed = true;
+                }
+            }
+        }
+
+        const numTrees = this.randomInt(15, 30);
+        for (let i = 0; i < numTrees; i++) {
+            let placed = false;
+            let attempts = 0;
+            
+            while (!placed && attempts < 30) {
+                attempts++;
+                const x = this.random(30, this.mapSize - 30);
+                const y = this.random(30, this.mapSize - 30);
+                
+                let valid = true;
+                
+                if (this.distanceBetween({ x, y }, this.flag) < greenSize + 25) valid = false;
+                if (this.distanceBetween({ x, y }, this.teeBox) < 50) valid = false;
+                
+                for (const fairway of this.fairways) {
+                    if (this.pointInPolygon(x, y, fairway.points)) {
+                        valid = false;
+                        break;
+                    }
+                }
+                
+                for (const water of this.waterFeatures) {
+                    if (this.distanceBetween({ x, y }, { x: water.cx, y: water.cy }) < water.size + 15) {
+                        valid = false;
+                        break;
+                    }
+                }
+                
+                for (const pit of this.sandPits) {
+                    if (this.distanceBetween({ x, y }, { x: pit.cx, y: pit.cy }) < pit.size + 10) {
+                        valid = false;
+                        break;
+                    }
+                }
+                
+                for (const tree of this.trees) {
+                    if (this.distanceBetween({ x, y }, tree) < 25) {
+                        valid = false;
+                        break;
+                    }
+                }
+                
+                if (valid) {
+                    this.trees.push(this.generateTree(x, y));
+                    placed = true;
+                }
+            }
+        }
+    }
+
+    generateHole() {
+        const isIsland = Math.random() < 0.35;
         
-        for (let i = 2; i < numIslands; i++) {
-            let placed = false;
-            let attempts = 0;
-            
-            while (!placed && attempts < 50) {
-                attempts++;
-                
-                let cx, cy;
-                if (Math.random() < 0.6 && pathPoints.length > 2) {
-                    const pathIdx = this.randomInt(1, pathPoints.length - 2);
-                    const pathPoint = pathPoints[pathIdx];
-                    cx = pathPoint.x + this.random(-80, 80);
-                    cy = pathPoint.y + this.random(-80, 80);
-                } else {
-                    cx = this.random(80, this.mapSize - 80);
-                    cy = this.random(80, this.mapSize - 80);
-                }
-                
-                let tooClose = false;
-                for (const existing of this.islands) {
-                    if (this.distanceBetween({ x: cx, y: cy }, { x: existing.cx, y: existing.cy }) < existing.size + 40) {
-                        tooClose = true;
-                        break;
-                    }
-                }
-                
-                if (!tooClose) {
-                    const size = this.random(50, 120);
-                    const type = islandTypes[this.randomInt(0, islandTypes.length - 1)];
-                    this.islands.push(this.generateOrganicIsland(cx, cy, size, type));
-                    placed = true;
-                }
-            }
+        if (isIsland) {
+            this.generateIslandHole();
+        } else {
+            this.generateParklandHole();
         }
 
-        const numBridges = this.randomInt(1, 3);
-        for (let i = 0; i < numBridges; i++) {
-            if (this.islands.length < 2) break;
-            
-            let bestPair = null;
-            let bestDist = Infinity;
-            
-            for (let a = 0; a < this.islands.length; a++) {
-                for (let b = a + 1; b < this.islands.length; b++) {
-                    const dist = this.distanceBetween(
-                        { x: this.islands[a].cx, y: this.islands[a].cy },
-                        { x: this.islands[b].cx, y: this.islands[b].cy }
-                    );
-                    const minReach = this.islands[a].size + this.islands[b].size + 30;
-                    const maxReach = this.islands[a].size + this.islands[b].size + 150;
-                    
-                    if (dist > minReach && dist < maxReach && dist < bestDist) {
-                        bestDist = dist;
-                        bestPair = [this.islands[a], this.islands[b]];
-                    }
-                }
-            }
-            
-            if (bestPair && Math.random() < 0.7) {
-                this.islands.push(this.generateFairwayBridge(bestPair[0], bestPair[1]));
-            }
-        }
-
-        const numSandPits = this.randomInt(1, 4);
-        for (let i = 0; i < numSandPits; i++) {
-            let placed = false;
-            let attempts = 0;
-            
-            while (!placed && attempts < 30) {
-                attempts++;
-                
-                const targetIsland = this.islands[this.randomInt(1, this.islands.length - 1)];
-                const angle = this.random(0, Math.PI * 2);
-                const dist = targetIsland.size * this.random(0.3, 0.7);
-                const cx = targetIsland.cx + Math.cos(angle) * dist;
-                const cy = targetIsland.cy + Math.sin(angle) * dist;
-                
-                if (this.islandContainsPoint(targetIsland, cx, cy)) {
-                    const size = this.random(15, 35);
-                    
-                    const distToFlag = this.distanceBetween({ x: cx, y: cy }, this.flag);
-                    const distToTee = this.distanceBetween({ x: cx, y: cy }, this.teeBox);
-                    
-                    if (distToFlag > 30 && distToTee > 30) {
-                        this.sandPits.push(this.generateSandPit(cx, cy, size));
-                        placed = true;
-                    }
-                }
-            }
-        }
-
-        const numGrassPatches = this.randomInt(2, 6);
-        for (let i = 0; i < numGrassPatches; i++) {
-            let placed = false;
-            let attempts = 0;
-            
-            while (!placed && attempts < 30) {
-                attempts++;
-                
-                const cx = this.random(50, this.mapSize - 50);
-                const cy = this.random(50, this.mapSize - 50);
-                
-                let onIsland = false;
-                for (const island of this.islands) {
-                    if (this.distanceBetween({ x: cx, y: cy }, { x: island.cx, y: island.cy }) < island.size * 1.5) {
-                        onIsland = true;
-                        break;
-                    }
-                }
-                
-                if (!onIsland) {
-                    const size = this.random(30, 70);
-                    this.grassPatches.push(this.generateGrassPatch(cx, cy, size));
-                    placed = true;
-                }
-            }
-        }
+        const allPlayableAreas = [
+            ...this.roughs.map(r => r.points),
+            ...this.fairways.map(f => f.points)
+        ];
 
         return {
-            islands: this.islands,
+            holeStyle: this.holeStyle,
+            green: this.green,
+            fairways: this.fairways,
+            roughs: this.roughs,
             sandPits: this.sandPits,
-            grassPatches: this.grassPatches,
+            waterFeatures: this.waterFeatures,
+            trees: this.trees,
             teeBox: this.teeBox,
             flag: this.flag
         };
     }
 }
 
-// Terrain collision detection
 function pointInPolygon(px, py, points) {
     let inside = false;
     for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
@@ -406,13 +571,30 @@ function pointInPolygon(px, py, points) {
     return inside;
 }
 
-function isInWater(x, y, islands) {
-    for (const island of islands) {
-        if (pointInPolygon(x, y, island.points)) {
+function isInWater(x, y, hole) {
+    if (hole.holeStyle === HoleStyle.ISLAND) {
+        for (const rough of hole.roughs) {
+            if (pointInPolygon(x, y, rough.points)) {
+                return false;
+            }
+        }
+        for (const fairway of hole.fairways) {
+            if (pointInPolygon(x, y, fairway.points)) {
+                return false;
+            }
+        }
+        if (hole.green && pointInPolygon(x, y, hole.green.points)) {
             return false;
         }
+        return true;
+    } else {
+        for (const water of hole.waterFeatures) {
+            if (pointInPolygon(x, y, water.points)) {
+                return true;
+            }
+        }
+        return false;
     }
-    return true;
 }
 
 function isInSand(x, y, sandPits) {
@@ -424,11 +606,31 @@ function isInSand(x, y, sandPits) {
     return false;
 }
 
-function isInGrassOOB(x, y, grassPatches) {
-    for (const patch of grassPatches) {
-        if (pointInPolygon(x, y, patch.points)) {
+function isInRough(x, y, hole) {
+    if (hole.green && pointInPolygon(x, y, hole.green.points)) {
+        return false;
+    }
+    for (const fairway of hole.fairways) {
+        if (pointInPolygon(x, y, fairway.points)) {
+            return false;
+        }
+    }
+    for (const rough of hole.roughs) {
+        if (pointInPolygon(x, y, rough.points)) {
             return true;
         }
+    }
+    return false;
+}
+
+function isOutOfBounds(x, y, hole, mapSize) {
+    if (hole.holeStyle === HoleStyle.ISLAND) {
+        return false;
+    }
+    
+    const baseRough = hole.roughs.find(r => r.isBase);
+    if (baseRough && !pointInPolygon(x, y, baseRough.points)) {
+        return true;
     }
     return false;
 }

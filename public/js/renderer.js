@@ -24,6 +24,27 @@ function drawWater(ctx, mapSize) {
     }
 }
 
+function drawParklandBase(ctx, mapSize) {
+    const gradient = ctx.createRadialGradient(
+        mapSize / 2, mapSize / 2, 0,
+        mapSize / 2, mapSize / 2, mapSize * 0.7
+    );
+    gradient.addColorStop(0, '#15803d');
+    gradient.addColorStop(0.7, '#166534');
+    gradient.addColorStop(1, '#14532d');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, mapSize, mapSize);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+    for (let i = 0; i < mapSize; i += 12) {
+        for (let j = 0; j < mapSize; j += 12) {
+            if ((i + j) % 24 === 0) {
+                ctx.fillRect(i, j, 12, 12);
+            }
+        }
+    }
+}
+
 function drawShapeFromPoints(ctx, points) {
     if (points.length < 3) return;
     
@@ -45,85 +66,260 @@ function drawShapeFromPoints(ctx, points) {
     ctx.closePath();
 }
 
-function drawGrassPatch(ctx, patch) {
-    ctx.fillStyle = '#064e3b';
-    drawShapeFromPoints(ctx, patch.points);
+function drawRough(ctx, rough) {
+    if (rough.isBase) {
+        ctx.fillStyle = '#166534';
+        drawShapeFromPoints(ctx, rough.points);
+        ctx.fill();
+        
+        ctx.fillStyle = '#15803d';
+        ctx.globalAlpha = 0.4;
+        const innerPoints = rough.points.map(p => ({
+            x: rough.cx + (p.x - rough.cx) * 0.85,
+            y: rough.cy + (p.y - rough.cy) * 0.85
+        }));
+        drawShapeFromPoints(ctx, innerPoints);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        return;
+    }
+    
+    ctx.fillStyle = '#16a34a';
+    drawShapeFromPoints(ctx, rough.points);
     ctx.fill();
     
-    ctx.fillStyle = '#065f46';
-    ctx.globalAlpha = 0.6;
-    const innerPoints = patch.points.map(p => ({
-        x: patch.cx + (p.x - patch.cx) * 0.7,
-        y: patch.cy + (p.y - patch.cy) * 0.7
+    ctx.fillStyle = '#22c55e';
+    ctx.globalAlpha = 0.3;
+    const innerPoints = rough.points.map(p => ({
+        x: rough.cx + (p.x - rough.cx) * 0.7,
+        y: rough.cy + (p.y - rough.cy) * 0.7
     }));
     drawShapeFromPoints(ctx, innerPoints);
     ctx.fill();
     ctx.globalAlpha = 1;
     
-    ctx.strokeStyle = '#052e16';
+    ctx.strokeStyle = '#15803d';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.4;
+    for (let i = 0; i < rough.points.length; i += 3) {
+        const p = rough.points[i];
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + (Math.random() - 0.5) * 4, p.y - Math.random() * 6);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawFairway(ctx, fairway) {
+    ctx.fillStyle = '#4ade80';
+    drawShapeFromPoints(ctx, fairway.points);
+    ctx.fill();
+    
+    ctx.fillStyle = '#86efac';
+    ctx.globalAlpha = 0.35;
+    const innerPoints = fairway.points.map(p => ({
+        x: fairway.cx + (p.x - fairway.cx) * 0.6,
+        y: fairway.cy + (p.y - fairway.cy) * 0.6
+    }));
+    drawShapeFromPoints(ctx, innerPoints);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    ctx.strokeStyle = '#22c55e';
     ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    drawShapeFromPoints(ctx, patch.points);
+    ctx.globalAlpha = 0.2;
+    drawShapeFromPoints(ctx, fairway.points);
     ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+}
+
+function drawGreen(ctx, green) {
+    ctx.fillStyle = '#86efac';
+    drawShapeFromPoints(ctx, green.points);
+    ctx.fill();
+    
+    ctx.fillStyle = '#bbf7d0';
+    ctx.globalAlpha = 0.5;
+    const innerPoints = green.points.map(p => ({
+        x: green.cx + (p.x - green.cx) * 0.5,
+        y: green.cy + (p.y - green.cy) * 0.5
+    }));
+    drawShapeFromPoints(ctx, innerPoints);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 2;
+    drawShapeFromPoints(ctx, green.points);
+    ctx.stroke();
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 1;
+    const fringePoints = green.points.map(p => ({
+        x: green.cx + (p.x - green.cx) * 1.08,
+        y: green.cy + (p.y - green.cy) * 1.08
+    }));
+    drawShapeFromPoints(ctx, fringePoints);
+    ctx.stroke();
 }
 
 function drawSandPit(ctx, pit) {
-    ctx.fillStyle = '#c2a44e';
+    ctx.fillStyle = '#d4a84b';
     drawShapeFromPoints(ctx, pit.points);
     ctx.fill();
     
-    ctx.fillStyle = '#d4b85a';
-    const innerPoints = pit.points.map(p => ({
-        x: pit.cx + (p.x - pit.cx) * 0.6,
-        y: pit.cy + (p.y - pit.cy) * 0.6
+    ctx.fillStyle = '#e8c87a';
+    const midPoints = pit.points.map(p => ({
+        x: pit.cx + (p.x - pit.cx) * 0.65,
+        y: pit.cy + (p.y - pit.cy) * 0.65
     }));
-    drawShapeFromPoints(ctx, innerPoints);
+    drawShapeFromPoints(ctx, midPoints);
     ctx.fill();
     
-    ctx.fillStyle = '#e8d282';
-    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#f5e6b8';
+    ctx.globalAlpha = 0.7;
     const highlightPoints = pit.points.map(p => ({
-        x: pit.cx + (p.x - pit.cx) * 0.3 - 3,
-        y: pit.cy + (p.y - pit.cy) * 0.3 - 3
+        x: pit.cx + (p.x - pit.cx) * 0.3 - 2,
+        y: pit.cy + (p.y - pit.cy) * 0.3 - 2
     }));
     drawShapeFromPoints(ctx, highlightPoints);
     ctx.fill();
     ctx.globalAlpha = 1;
+    
+    ctx.strokeStyle = '#b8860b';
+    ctx.lineWidth = 1.5;
+    drawShapeFromPoints(ctx, pit.points);
+    ctx.stroke();
 }
 
-function drawIsland(ctx, island) {
-    ctx.fillStyle = '#166534';
-    drawShapeFromPoints(ctx, island.points);
+function drawWaterFeature(ctx, water) {
+    ctx.fillStyle = '#1e40af';
+    drawShapeFromPoints(ctx, water.points);
     ctx.fill();
-
-    ctx.fillStyle = '#22c55e';
-    const innerPoints = island.points.map(p => ({
-        x: island.cx + (p.x - island.cx) * 0.85,
-        y: island.cy + (p.y - island.cy) * 0.85
+    
+    ctx.fillStyle = '#2563eb';
+    const midPoints = water.points.map(p => ({
+        x: water.cx + (p.x - water.cx) * 0.7,
+        y: water.cy + (p.y - water.cy) * 0.7
     }));
-    drawShapeFromPoints(ctx, innerPoints);
+    drawShapeFromPoints(ctx, midPoints);
     ctx.fill();
-
-    ctx.fillStyle = '#4ade80';
-    ctx.globalAlpha = 0.7;
-    const highlightPoints = island.points.map(p => ({
-        x: island.cx + (p.x - island.cx) * 0.5 - 5,
-        y: island.cy + (p.y - island.cy) * 0.5 - 5
+    
+    ctx.fillStyle = '#3b82f6';
+    ctx.globalAlpha = 0.5;
+    const highlightPoints = water.points.map(p => ({
+        x: water.cx + (p.x - water.cx) * 0.35 - 3,
+        y: water.cy + (p.y - water.cy) * 0.35 - 3
     }));
     drawShapeFromPoints(ctx, highlightPoints);
     ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    ctx.strokeStyle = '#1e3a8a';
+    ctx.lineWidth = 2;
+    drawShapeFromPoints(ctx, water.points);
+    ctx.stroke();
+    
+    ctx.strokeStyle = 'rgba(147, 197, 253, 0.4)';
+    ctx.lineWidth = 1;
+    const time = Date.now() / 1000;
+    for (let i = 0; i < 3; i++) {
+        const scale = 0.3 + i * 0.25 + Math.sin(time + i) * 0.05;
+        const wavePoints = water.points.map(p => ({
+            x: water.cx + (p.x - water.cx) * scale,
+            y: water.cy + (p.y - water.cy) * scale
+        }));
+        drawShapeFromPoints(ctx, wavePoints);
+        ctx.stroke();
+    }
+}
+
+function drawTree(ctx, tree) {
+    const { x, y, size, type } = tree;
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.beginPath();
+    ctx.ellipse(x + 3, y + 3, size * 0.8, size * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (type === 0) {
+        ctx.fillStyle = '#14532d';
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#166534';
+        ctx.beginPath();
+        ctx.arc(x - size * 0.2, y - size * 0.2, size * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#22c55e';
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(x - size * 0.35, y - size * 0.35, size * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    } else if (type === 1) {
+        ctx.fillStyle = '#14532d';
+        ctx.beginPath();
+        ctx.moveTo(x, y - size * 1.2);
+        ctx.lineTo(x + size * 0.9, y + size * 0.5);
+        ctx.lineTo(x - size * 0.9, y + size * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = '#166534';
+        ctx.beginPath();
+        ctx.moveTo(x, y - size * 0.8);
+        ctx.lineTo(x + size * 0.6, y + size * 0.3);
+        ctx.lineTo(x - size * 0.6, y + size * 0.3);
+        ctx.closePath();
+        ctx.fill();
+    } else {
+        ctx.fillStyle = '#14532d';
+        ctx.beginPath();
+        ctx.arc(x - size * 0.3, y, size * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + size * 0.3, y - size * 0.2, size * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, y - size * 0.5, size * 0.65, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#166534';
+        ctx.beginPath();
+        ctx.arc(x, y - size * 0.3, size * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    ctx.strokeStyle = '#0f3d1f';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.globalAlpha = 1;
 }
 
 function drawTeeBox(ctx, teeBox) {
     ctx.fillStyle = '#fef3c7';
-    ctx.fillRect(teeBox.x - 12, teeBox.y - 6, 24, 12);
+    ctx.fillRect(teeBox.x - 15, teeBox.y - 8, 30, 16);
     ctx.strokeStyle = '#92400e';
     ctx.lineWidth = 2;
-    ctx.strokeRect(teeBox.x - 12, teeBox.y - 6, 24, 12);
+    ctx.strokeRect(teeBox.x - 15, teeBox.y - 8, 30, 16);
+    
+    ctx.fillStyle = '#f5f5f5';
+    ctx.beginPath();
+    ctx.arc(teeBox.x - 6, teeBox.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(teeBox.x + 6, teeBox.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+    
     ctx.fillStyle = '#92400e';
-    ctx.font = 'bold 8px sans-serif';
+    ctx.font = 'bold 9px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('TEE', teeBox.x, teeBox.y);
@@ -132,29 +328,58 @@ function drawTeeBox(ctx, teeBox) {
 function drawFlag(ctx, flag, holeRadius, celebration) {
     ctx.fillStyle = '#1f2937';
     ctx.beginPath();
-    ctx.arc(flag.x, flag.y, holeRadius, 0, Math.PI * 2);
+    ctx.arc(flag.x, flag.y, holeRadius + 2, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = '#111827';
     ctx.beginPath();
-    ctx.arc(flag.x, flag.y, holeRadius - 3, 0, Math.PI * 2);
+    ctx.arc(flag.x, flag.y, holeRadius - 2, 0, Math.PI * 2);
     ctx.fill();
 
+    const poleHeight = 55;
     const poleColor = celebration.isActive ? '#fbbf24' : '#f5f5f5';
     ctx.strokeStyle = poleColor;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(flag.x, flag.y);
-    ctx.lineTo(flag.x, flag.y - 35);
+    ctx.lineTo(flag.x, flag.y - poleHeight);
+    ctx.stroke();
+    
+    ctx.strokeStyle = '#d4d4d4';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(flag.x + 1, flag.y);
+    ctx.lineTo(flag.x + 1, flag.y - poleHeight);
     ctx.stroke();
 
-    const flagColor = celebration.isActive ? celebration.currentFlagColor : '#ef4444';
+    const flagColor = celebration.isActive ? celebration.currentFlagColor : '#dc2626';
+    const flagWidth = 32;
+    const flagHeight = 22;
+    
     ctx.fillStyle = flagColor;
     ctx.beginPath();
-    ctx.moveTo(flag.x, flag.y - 35);
-    ctx.lineTo(flag.x + 20, flag.y - 28);
-    ctx.lineTo(flag.x, flag.y - 21);
+    ctx.moveTo(flag.x, flag.y - poleHeight);
+    ctx.lineTo(flag.x + flagWidth, flag.y - poleHeight + flagHeight / 2);
+    ctx.lineTo(flag.x, flag.y - poleHeight + flagHeight);
     ctx.closePath();
+    ctx.fill();
+    
+    ctx.strokeStyle = '#991b1b';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.moveTo(flag.x, flag.y - poleHeight);
+    ctx.lineTo(flag.x + flagWidth * 0.6, flag.y - poleHeight + flagHeight * 0.3);
+    ctx.lineTo(flag.x + flagWidth * 0.3, flag.y - poleHeight + flagHeight * 0.5);
+    ctx.lineTo(flag.x, flag.y - poleHeight + flagHeight * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(flag.x, flag.y - poleHeight, 4, 0, Math.PI * 2);
     ctx.fill();
 }
 
@@ -227,12 +452,17 @@ function drawAimingLine(ctx, gameState) {
 function drawBall(ctx, ball, ballRadius, scale = 1.0) {
     const scaledRadius = ballRadius * scale;
     
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.beginPath();
+    ctx.ellipse(ball.x + 2, ball.y + 2, scaledRadius * 0.9, scaledRadius * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
     ctx.fillStyle = '#f5f5f5';
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, scaledRadius, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.beginPath();
     ctx.arc(ball.x - 2 * scale, ball.y - 2 * scale, 3 * scale, 0, Math.PI * 2);
     ctx.fill();
@@ -242,4 +472,50 @@ function drawBall(ctx, ball, ballRadius, scale = 1.0) {
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, scaledRadius, 0, Math.PI * 2);
     ctx.stroke();
+}
+
+function drawCourse(ctx, hole, mapSize) {
+    if (hole.holeStyle === HoleStyle.ISLAND) {
+        drawWater(ctx, mapSize);
+        
+        for (const rough of hole.roughs) {
+            drawRough(ctx, rough);
+        }
+        for (const fairway of hole.fairways) {
+            drawFairway(ctx, fairway);
+        }
+    } else {
+        drawParklandBase(ctx, mapSize);
+        
+        const baseRough = hole.roughs.find(r => r.isBase);
+        if (baseRough) {
+            drawRough(ctx, baseRough);
+        }
+        
+        for (const rough of hole.roughs) {
+            if (!rough.isBase) {
+                drawRough(ctx, rough);
+            }
+        }
+        
+        for (const fairway of hole.fairways) {
+            drawFairway(ctx, fairway);
+        }
+        
+        for (const water of hole.waterFeatures) {
+            drawWaterFeature(ctx, water);
+        }
+    }
+    
+    for (const pit of hole.sandPits) {
+        drawSandPit(ctx, pit);
+    }
+    
+    if (hole.green) {
+        drawGreen(ctx, hole.green);
+    }
+    
+    for (const tree of hole.trees) {
+        drawTree(ctx, tree);
+    }
 }

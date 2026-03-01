@@ -45,9 +45,6 @@ let aimAngle = 0;
 // Course state
 const holeGenerator = new HoleGenerator(MAP_SIZE);
 let currentHole = holeGenerator.generateHole();
-let islands = currentHole.islands;
-let sandPits = currentHole.sandPits;
-let grassPatches = currentHole.grassPatches;
 let teeBox = { ...currentHole.teeBox };
 let flag = { ...currentHole.flag };
 let ball = { x: teeBox.x, y: teeBox.y };
@@ -413,11 +410,74 @@ function executeSwing(shot, accuracy) {
         if (progress < 1) {
             requestAnimationFrame(animate);
         } else {
-            finishSwing(shot);
+            animateBounce(shot, dirX, dirY);
         }
     }
 
     requestAnimationFrame(animate);
+}
+
+function animateBounce(shot, dirX, dirY) {
+    const bounceCount = shot.bounceCount;
+    const totalBounceDistance = shot.bounceDistance * MAP_SIZE;
+    
+    if (bounceCount <= 0 || totalBounceDistance <= 0) {
+        finishSwing(shot);
+        return;
+    }
+    
+    let currentBounce = 0;
+    let bounceDistances = [];
+    let remainingDist = totalBounceDistance;
+    
+    for (let i = 0; i < bounceCount; i++) {
+        const fraction = 1 / Math.pow(2, i);
+        bounceDistances.push(remainingDist * 0.5);
+        remainingDist *= 0.5;
+    }
+    
+    function doBounce() {
+        if (currentBounce >= bounceCount) {
+            finishSwing(shot);
+            return;
+        }
+        
+        const bounceDist = bounceDistances[currentBounce];
+        const startX = ball.x;
+        const startY = ball.y;
+        const endX = startX + dirX * bounceDist;
+        const endY = startY + dirY * bounceDist;
+        
+        const bounceDuration = 150 + currentBounce * 50;
+        const bounceHeight = 0.15 * Math.pow(0.6, currentBounce);
+        const startTime = performance.now();
+        
+        function animateSingleBounce(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / bounceDuration, 1);
+            
+            const easeProgress = 1 - Math.pow(1 - progress, 2);
+            ball.x = startX + (endX - startX) * easeProgress;
+            ball.y = startY + (endY - startY) * easeProgress;
+            
+            const heightProgress = Math.sin(progress * Math.PI);
+            const maxScale = 1.0 + bounceHeight * (1 + shot.loftScalar * 0.1);
+            const ballScale = 1.0 + (maxScale - 1.0) * heightProgress;
+            
+            draw(ballScale);
+            
+            if (progress < 1) {
+                requestAnimationFrame(animateSingleBounce);
+            } else {
+                currentBounce++;
+                doBounce();
+            }
+        }
+        
+        requestAnimationFrame(animateSingleBounce);
+    }
+    
+    doBounce();
 }
 
 function finishSwing(shot) {
@@ -447,7 +507,7 @@ function finishSwing(shot) {
         return;
     }
 
-    if (isInWater(ball.x, ball.y, islands)) {
+    if (isInWater(ball.x, ball.y, currentHole)) {
         showMessage('Splash! Ball in water - reset to tee.', true);
         setTimeout(() => {
             ball.x = teeBox.x;
@@ -457,8 +517,8 @@ function finishSwing(shot) {
         return;
     }
 
-    if (isInGrassOOB(ball.x, ball.y, grassPatches)) {
-        showMessage('Out of bounds! Ball in tall grass - reset to tee.', true);
+    if (isOutOfBounds(ball.x, ball.y, currentHole, MAP_SIZE)) {
+        showMessage('Out of bounds! Reset to tee.', true);
         setTimeout(() => {
             ball.x = teeBox.x;
             ball.y = teeBox.y;
@@ -467,10 +527,12 @@ function finishSwing(shot) {
         return;
     }
 
-    const inSand = isInSand(ball.x, ball.y, sandPits);
+    const inSand = isInSand(ball.x, ball.y, currentHole.sandPits);
+    const inRough = isInRough(ball.x, ball.y, currentHole);
     const distRemaining = (distToFlag / MAP_SIZE * 100).toFixed(0);
     
     if (inSand) showMessage(`${distRemaining}% to flag - In sand bunker!`);
+    else if (inRough) showMessage(`${distRemaining}% to flag - In the rough`);
     else showMessage(`${distRemaining}% to flag`);
 
     endTurn();
@@ -478,6 +540,9 @@ function finishSwing(shot) {
 
 function endTurn() {
     for (const card of strokeCards) {
+        if (card.id === 'putter' && card.type === CardType.CLUB) {
+            continue;
+        }
         deck.discardCard(card);
     }
     strokeCards = [];
@@ -522,9 +587,6 @@ function newHole() {
     totalStrokesEl.textContent = '0';
     
     currentHole = holeGenerator.generateHole();
-    islands = currentHole.islands;
-    sandPits = currentHole.sandPits;
-    grassPatches = currentHole.grassPatches;
     teeBox = { ...currentHole.teeBox };
     flag = { ...currentHole.flag };
 
@@ -549,7 +611,8 @@ function newHole() {
 
     const distance = Math.sqrt((flag.x - teeBox.x) ** 2 + (flag.y - teeBox.y) ** 2);
     const distPercent = ((distance / MAP_SIZE) * 100).toFixed(0);
-    showMessage(`New game! Distance: ${distPercent}% | Islands: ${islands.length}`);
+    const holeType = currentHole.holeStyle === HoleStyle.ISLAND ? 'Island' : 'Parkland';
+    showMessage(`New game! ${holeType} hole | Distance: ${distPercent}%`);
 }
 
 function newHoleAfterReward() {
@@ -557,9 +620,6 @@ function newHoleAfterReward() {
     holeNumberEl.textContent = holeNumber;
     
     currentHole = holeGenerator.generateHole();
-    islands = currentHole.islands;
-    sandPits = currentHole.sandPits;
-    grassPatches = currentHole.grassPatches;
     teeBox = { ...currentHole.teeBox };
     flag = { ...currentHole.flag };
 
@@ -583,7 +643,8 @@ function newHoleAfterReward() {
     const distance = Math.sqrt((flag.x - teeBox.x) ** 2 + (flag.y - teeBox.y) ** 2);
     const distPercent = ((distance / MAP_SIZE) * 100).toFixed(0);
     const deckSize = deck.drawPile.length + deck.discardPile.length + deck.hand.length;
-    showMessage(`Hole ${holeNumber}! Distance: ${distPercent}% | Deck: ${deckSize} cards`);
+    const holeType = currentHole.holeStyle === HoleStyle.ISLAND ? 'Island' : 'Parkland';
+    showMessage(`Hole ${holeNumber}! ${holeType} | Distance: ${distPercent}% | Deck: ${deckSize} cards`);
 }
 
 // ============================================
@@ -591,19 +652,8 @@ function newHoleAfterReward() {
 // ============================================
 function draw(ballScale = 1.0) {
     ctx.clearRect(0, 0, MAP_SIZE, MAP_SIZE);
-    drawWater(ctx, MAP_SIZE);
     
-    for (const patch of grassPatches) {
-        drawGrassPatch(ctx, patch);
-    }
-    
-    for (const island of islands) {
-        drawIsland(ctx, island);
-    }
-    
-    for (const pit of sandPits) {
-        drawSandPit(ctx, pit);
-    }
+    drawCourse(ctx, currentHole, MAP_SIZE);
     
     drawTeeBox(ctx, teeBox);
     drawFlag(ctx, flag, HOLE_RADIUS, Celebration);
