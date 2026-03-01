@@ -12,7 +12,9 @@
             <div class="message" id="message"></div>
             <canvas id="gameCanvas"></canvas>
             <div class="stats-row">
+                <div class="hole-display">Hole: <span id="holeNumber">1</span></div>
                 <div class="strokes-display">Strokes: <span id="strokeCount">0</span></div>
+                <div class="total-display">Total: <span id="totalStrokes">0</span></div>
             </div>
         </div>
 
@@ -33,7 +35,7 @@
                 <button class="btn btn-clear" id="clearBtn">Clear Stroke</button>
                 <button class="btn btn-reroll" id="rerollBtn">Reroll</button>
                 <span class="reroll-info" id="rerollInfo">(2 left)</span>
-                <button class="btn btn-end" id="endHoleBtn">New Hole</button>
+                <button class="btn btn-end" id="endHoleBtn">New Game</button>
             </div>
 
             <div class="hand-row">
@@ -78,6 +80,23 @@
         </div>
     </div>
 
+    <!-- Card Reward Modal -->
+    <div class="reward-overlay" id="rewardOverlay">
+        <div class="reward-modal">
+            <h2 id="rewardTitle">Hole Complete!</h2>
+            <p class="reward-strokes" id="rewardStrokes"></p>
+            <p class="reward-hint">Choose a card to add to your deck:</p>
+            <div class="reward-cards" id="rewardCards"></div>
+            <button class="btn btn-skip" id="skipRewardBtn">Skip Reward</button>
+        </div>
+    </div>
+
+    <script src="/js/cards.js"></script>
+    <script src="/js/deck.js"></script>
+    <script src="/js/shot.js"></script>
+    <script src="/js/course.js"></script>
+    <script src="/js/renderer.js"></script>
+    <script src="/js/ui.js"></script>
     <script src="/js/game.js"></script>
 </body>
 </html>
