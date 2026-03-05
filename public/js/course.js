@@ -557,6 +557,38 @@ class HoleGenerator {
             flag: this.flag
         };
     }
+
+    /** Generates a 3-hole island course: 2 yellow-flag checkpoints, then 1 red-flag final. */
+    generateIslandCourse() {
+        const stages = [
+            { flagType: 'yellow', label: 'Checkpoint 1' },
+            { flagType: 'yellow', label: 'Checkpoint 2' },
+            { flagType: 'red', label: 'Final' }
+        ];
+        const course = [];
+        let prevFlag = null;
+        for (let i = 0; i < stages.length; i++) {
+            this.generateIslandHole();
+            const hole = {
+                holeStyle: this.holeStyle,
+                green: this.green,
+                fairways: this.fairways,
+                roughs: this.roughs,
+                sandPits: this.sandPits,
+                waterFeatures: this.waterFeatures,
+                trees: this.trees,
+                teeBox: { ...this.teeBox },
+                flag: { ...this.flag }
+            };
+            if (prevFlag) {
+                hole.teeBox.x = prevFlag.x;
+                hole.teeBox.y = prevFlag.y;
+            }
+            prevFlag = { ...hole.flag };
+            course.push({ flagType: stages[i].flagType, label: stages[i].label, hole });
+        }
+        return course;
+    }
 }
 
 function pointInPolygon(px, py, points) {

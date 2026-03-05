@@ -41,9 +41,13 @@ let isAnimating = false;
 let gameWon = false;
 let rerollsRemaining = MAX_REROLLS;
 let aimAngle = 0;
+let currentBallType = 'standard';
 
-// Course state
+// Course state: 3-hole island round (2 yellow checkpoints, 1 red final)
 const holeGenerator = new HoleGenerator(MAP_SIZE);
+let courseHoles = [];
+let currentStageIndex = 0;
+let currentFlagType = 'red';
 let currentHole = holeGenerator.generateHole();
 let teeBox = { ...currentHole.teeBox };
 let flag = { ...currentHole.flag };
@@ -89,6 +93,13 @@ CardReward.init(deck, {
     cards: document.getElementById('rewardCards'),
     skipBtn: document.getElementById('skipRewardBtn')
 }, newHoleAfterReward);
+
+CheckpointReward.init({
+    overlay: document.getElementById('checkpointOverlay'),
+    title: document.getElementById('checkpointTitle'),
+    strokes: document.getElementById('checkpointStrokes'),
+    choices: document.getElementById('checkpointChoices')
+}, onCheckpointRewardChosen);
 
 // ============================================
 // AIM CONTROL SYSTEM
@@ -296,6 +307,11 @@ function onStrokeCardClicked(card) {
         }
     }
 
+    if (card.id === 'practice_swing') {
+        showMessage('Practice Swing stays with the putter - cannot remove.', true);
+        return;
+    }
+
     const idx = strokeCards.findIndex(c => c.instanceId === card.instanceId);
     if (idx >= 0) {
         strokeCards.splice(idx, 1);
@@ -313,6 +329,7 @@ function onStrokeCardClicked(card) {
 function startTurn() {
     strokeCards = [];
     strokeCards.push(createPutter());
+    strokeCards.push(createPracticeSwing());
     deck.fillHand();
     renderHand();
     renderStroke();
@@ -323,7 +340,7 @@ function startTurn() {
 function doSwing() {
     if (isAnimating || gameWon) return;
 
-    const shot = calculateShot(strokeCards);
+    const shot = calculateShot(strokeCards, currentBallType);
     debugOutput.innerHTML = shot.getDebugString();
 
     if (!shot.isValid) {
@@ -346,7 +363,7 @@ function executeSwing(shot, accuracy) {
     strokeCountEl.textContent = strokeCount;
     totalStrokesEl.textContent = totalStrokes;
 
-    const inSandAtStart = isInSand(ball.x, ball.y, sandPits);
+    const inSandAtStart = isInSand(ball.x, ball.y, currentHole.sandPits);
     const sandPenalty = inSandAtStart ? 0.6 : 1.0;
     
     const MAX_VARIANCE = 0.20;
@@ -390,17 +407,21 @@ function executeSwing(shot, accuracy) {
 
     const startX = ball.x;
     const startY = ball.y;
-    const duration = 600;
+    const duration = 900;
     const startTime = performance.now();
+
+    function easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
 
     function animate(currentTime) {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        const easeProgress = easeInOutCubic(progress);
 
         ball.x = startX + (targetX - startX) * easeProgress;
         ball.y = startY + (targetY - startY) * easeProgress;
-        
+
         const heightProgress = Math.sin(progress * Math.PI);
         const maxScale = 1.0 + 0.4 * Math.max(0, 1 + shot.loftScalar * 0.2);
         const ballScale = 1.0 + (maxScale - 1.0) * heightProgress;
@@ -417,12 +438,45 @@ function executeSwing(shot, accuracy) {
     requestAnimationFrame(animate);
 }
 
+function animateRoll(shot, dirX, dirY) {
+    const rollDist = (shot.rollDistance || 0) * MAP_SIZE;
+    if (rollDist <= 0) {
+        finishSwing(shot);
+        return;
+    }
+    const startX = ball.x;
+    const startY = ball.y;
+    const endX = startX + dirX * rollDist;
+    const endY = startY + dirY * rollDist;
+    const duration = 500 + Math.min(rollDist * 0.4, 500);
+    const startTime = performance.now();
+
+    function easeOutQuart(t) {
+        return 1 - Math.pow(1 - t, 4);
+    }
+
+    function animate(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = easeOutQuart(progress);
+        ball.x = startX + (endX - startX) * easeProgress;
+        ball.y = startY + (endY - startY) * easeProgress;
+        draw(1.0);
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            finishSwing(shot);
+        }
+    }
+    requestAnimationFrame(animate);
+}
+
 function animateBounce(shot, dirX, dirY) {
     const bounceCount = shot.bounceCount;
     const totalBounceDistance = shot.bounceDistance * MAP_SIZE;
-    
+
     if (bounceCount <= 0 || totalBounceDistance <= 0) {
-        finishSwing(shot);
+        animateRoll(shot, dirX, dirY);
         return;
     }
     
@@ -438,34 +492,38 @@ function animateBounce(shot, dirX, dirY) {
     
     function doBounce() {
         if (currentBounce >= bounceCount) {
-            finishSwing(shot);
+            animateRoll(shot, dirX, dirY);
             return;
         }
-        
+
         const bounceDist = bounceDistances[currentBounce];
         const startX = ball.x;
         const startY = ball.y;
         const endX = startX + dirX * bounceDist;
         const endY = startY + dirY * bounceDist;
-        
-        const bounceDuration = 150 + currentBounce * 50;
+
+        const bounceDuration = 220 + currentBounce * 60;
         const bounceHeight = 0.15 * Math.pow(0.6, currentBounce);
         const startTime = performance.now();
-        
+
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
         function animateSingleBounce(currentTime) {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / bounceDuration, 1);
-            
-            const easeProgress = 1 - Math.pow(1 - progress, 2);
+            const easeProgress = easeInOutCubic(progress);
+
             ball.x = startX + (endX - startX) * easeProgress;
             ball.y = startY + (endY - startY) * easeProgress;
-            
+
             const heightProgress = Math.sin(progress * Math.PI);
             const maxScale = 1.0 + bounceHeight * (1 + shot.loftScalar * 0.1);
             const ballScale = 1.0 + (maxScale - 1.0) * heightProgress;
-            
+
             draw(ballScale);
-            
+
             if (progress < 1) {
                 requestAnimationFrame(animateSingleBounce);
             } else {
@@ -473,7 +531,7 @@ function animateBounce(shot, dirX, dirY) {
                 doBounce();
             }
         }
-        
+
         requestAnimationFrame(animateSingleBounce);
     }
     
@@ -493,14 +551,26 @@ function finishSwing(shot) {
 
     const distToFlag = Math.sqrt((ball.x - flag.x) ** 2 + (ball.y - flag.y) ** 2);
     if (distToFlag < HOLE_RADIUS) {
-        gameWon = true;
-        isAnimating = true;
         ball.x = flag.x;
         ball.y = flag.y;
-        showMessage(`Holed in ${strokeCount} strokes!`);
-        swingBtn.disabled = true;
-        
         const finalStrokeCount = strokeCount;
+        const stage = courseHoles[currentStageIndex];
+        const isYellowCheckpoint = currentFlagType === 'yellow';
+
+        if (isYellowCheckpoint) {
+            isAnimating = true;
+            swingBtn.disabled = true;
+            showMessage(`${stage.label} in ${finalStrokeCount} strokes! Choose a reward.`);
+            Celebration.start(ctx, flag, () => draw(), () => {
+                CheckpointReward.show(finalStrokeCount, stage.label);
+            });
+            return;
+        }
+
+        gameWon = true;
+        isAnimating = true;
+        showMessage(`Round complete! Holed in ${finalStrokeCount} strokes!`);
+        swingBtn.disabled = true;
         Celebration.start(ctx, flag, () => draw(), () => {
             CardReward.show(finalStrokeCount);
         });
@@ -538,9 +608,67 @@ function finishSwing(shot) {
     endTurn();
 }
 
+function applyCheckpointReward(rewardId) {
+    switch (rewardId) {
+        case 'relic':
+            const relicPool = getRandomRewardCards(3);
+            if (relicPool.length > 0) {
+                const relic = relicPool[0];
+                deck.drawPile.push(relic);
+                deck.shuffle();
+                showMessage(`Added ${relic.name} to your deck!`);
+            }
+            break;
+        case 'reduce_strokes':
+            totalStrokes = Math.max(0, totalStrokes - 2);
+            totalStrokesEl.textContent = totalStrokes;
+            showMessage('Total strokes reduced by 2!');
+            break;
+        case 'extra_reroll':
+            rerollsRemaining++;
+            updateRerollUI();
+            showMessage('Gained 1 extra reroll!');
+            break;
+        case 'draw_cards':
+            deck.drawToHand(3);
+            renderHand();
+            updateDeckInfo();
+            showMessage('Drew 3 cards!');
+            break;
+        default:
+            break;
+    }
+}
+
+function advanceToNextStage() {
+    currentStageIndex++;
+    const stage = courseHoles[currentStageIndex];
+    currentHole = stage.hole;
+    teeBox = { x: flag.x, y: flag.y };
+    ball = { x: teeBox.x, y: teeBox.y };
+    flag = { ...stage.hole.flag };
+    currentFlagType = stage.flagType;
+    strokeCount = 0;
+    strokeCountEl.textContent = '0';
+    holeNumberEl.textContent = `${currentStageIndex + 1}/3`;
+    gameWon = false;
+    isAnimating = false;
+    swingBtn.disabled = false;
+    updateRerollUI();
+    startTurn();
+    draw();
+    const distPercent = ((Math.sqrt((flag.x - teeBox.x) ** 2 + (flag.y - teeBox.y) ** 2) / MAP_SIZE) * 100).toFixed(0);
+    showMessage(`${stage.label} | Distance: ${distPercent}%`);
+}
+
+function onCheckpointRewardChosen(rewardId) {
+    applyCheckpointReward(rewardId);
+    advanceToNextStage();
+}
+
 function endTurn() {
     for (const card of strokeCards) {
-        if (card.id === 'putter' && card.type === CardType.CLUB) {
+        if ((card.id === 'putter' && card.type === CardType.CLUB) || card.id === 'practice_swing') {
             continue;
         }
         deck.discardCard(card);
@@ -557,9 +685,11 @@ function endTurn() {
 function clearStroke() {
     if (isAnimating || gameWon) return;
     for (const card of strokeCards) {
-        deck.addToHand(card);
+        if (card.id !== 'putter' && card.id !== 'practice_swing') {
+            deck.addToHand(card);
+        }
     }
-    strokeCards = [];
+    strokeCards = strokeCards.filter(c => c.id === 'putter' || c.id === 'practice_swing');
     renderHand();
     renderStroke();
     showMessage('Stroke cleared.');
@@ -580,71 +710,45 @@ function doReroll() {
     showMessage(`Rerolled hand! ${rerollsRemaining} reroll${rerollsRemaining !== 1 ? 's' : ''} remaining.`);
 }
 
-function newHole() {
-    holeNumber = 1;
-    totalStrokes = 0;
-    holeNumberEl.textContent = '1';
-    totalStrokesEl.textContent = '0';
-    
-    currentHole = holeGenerator.generateHole();
-    teeBox = { ...currentHole.teeBox };
-    flag = { ...currentHole.flag };
-
+function startIslandRound() {
+    courseHoles = holeGenerator.generateIslandCourse();
+    currentStageIndex = 0;
+    const stage = courseHoles[0];
+    currentHole = stage.hole;
+    teeBox = { ...stage.hole.teeBox };
+    flag = { ...stage.hole.flag };
+    currentFlagType = stage.flagType;
     ball = { x: teeBox.x, y: teeBox.y };
     strokeCount = 0;
-    strokeCountEl.textContent = '0';
+    holeNumberEl.textContent = '1/3';
+    totalStrokes = 0;
+    totalStrokesEl.textContent = '0';
     gameWon = false;
     isAnimating = false;
     rerollsRemaining = MAX_REROLLS;
     aimAngle = 0;
     updateAimDisplay();
-
-    deck.initialize(createStarterDeck());
     strokeCards = [];
-
     swingBtn.disabled = false;
     rerollBtn.disabled = false;
-    debugOutput.innerHTML = 'Waiting for swing...';
-
+    updateRerollUI();
     startTurn();
     draw();
+    const distPercent = ((Math.sqrt((flag.x - teeBox.x) ** 2 + (flag.y - teeBox.y) ** 2) / MAP_SIZE) * 100).toFixed(0);
+    showMessage(`${stage.label} | Island | Distance: ${distPercent}%`);
+}
 
-    const distance = Math.sqrt((flag.x - teeBox.x) ** 2 + (flag.y - teeBox.y) ** 2);
-    const distPercent = ((distance / MAP_SIZE) * 100).toFixed(0);
-    const holeType = currentHole.holeStyle === HoleStyle.ISLAND ? 'Island' : 'Parkland';
-    showMessage(`New game! ${holeType} hole | Distance: ${distPercent}%`);
+function newHole() {
+    deck.initialize(createStarterDeck());
+    startIslandRound();
+    debugOutput.innerHTML = 'Waiting for swing...';
 }
 
 function newHoleAfterReward() {
-    holeNumber++;
-    holeNumberEl.textContent = holeNumber;
-    
-    currentHole = holeGenerator.generateHole();
-    teeBox = { ...currentHole.teeBox };
-    flag = { ...currentHole.flag };
-
-    ball = { x: teeBox.x, y: teeBox.y };
-    strokeCount = 0;
-    strokeCountEl.textContent = '0';
-    gameWon = false;
-    isAnimating = false;
-    rerollsRemaining = MAX_REROLLS;
-    aimAngle = 0;
-    updateAimDisplay();
-
-    strokeCards = [];
-    swingBtn.disabled = false;
-    rerollBtn.disabled = false;
-    debugOutput.innerHTML = 'Waiting for swing...';
-
-    startTurn();
-    draw();
-
-    const distance = Math.sqrt((flag.x - teeBox.x) ** 2 + (flag.y - teeBox.y) ** 2);
-    const distPercent = ((distance / MAP_SIZE) * 100).toFixed(0);
+    startIslandRound();
     const deckSize = deck.drawPile.length + deck.discardPile.length + deck.hand.length;
-    const holeType = currentHole.holeStyle === HoleStyle.ISLAND ? 'Island' : 'Parkland';
-    showMessage(`Hole ${holeNumber}! ${holeType} | Distance: ${distPercent}% | Deck: ${deckSize} cards`);
+    showMessage(`New round! Deck: ${deckSize} cards`);
+    debugOutput.innerHTML = 'Waiting for swing...';
 }
 
 // ============================================
@@ -656,7 +760,7 @@ function draw(ballScale = 1.0) {
     drawCourse(ctx, currentHole, MAP_SIZE);
     
     drawTeeBox(ctx, teeBox);
-    drawFlag(ctx, flag, HOLE_RADIUS, Celebration);
+    drawFlag(ctx, flag, HOLE_RADIUS, Celebration, currentFlagType);
     
     drawAimingLine(ctx, {
         gameWon,
@@ -680,7 +784,8 @@ rerollBtn.addEventListener('click', doReroll);
 endHoleBtn.addEventListener('click', newHole);
 
 deck.initialize(createStarterDeck());
-startTurn();
+startIslandRound();
+debugOutput.innerHTML = 'Waiting for swing...';
 
 function gameLoop() {
     draw();

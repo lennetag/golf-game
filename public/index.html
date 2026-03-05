@@ -91,6 +91,20 @@
         </div>
     </div>
 
+    <!-- Checkpoint Reward (yellow flag) -->
+    <div class="reward-overlay checkpoint-overlay" id="checkpointOverlay">
+        <div class="reward-modal checkpoint-modal">
+            <h2 id="checkpointTitle">Checkpoint reached!</h2>
+            <p class="reward-strokes" id="checkpointStrokes"></p>
+            <div class="checkpoint-choices" id="checkpointChoices">
+                <button type="button" class="btn checkpoint-choice" data-reward="relic">Special Relic</button>
+                <button type="button" class="btn checkpoint-choice" data-reward="reduce_strokes">Reduce strokes by 2</button>
+                <button type="button" class="btn checkpoint-choice" data-reward="extra_reroll">Extra reroll</button>
+                <button type="button" class="btn checkpoint-choice" data-reward="draw_cards">Draw 3 cards</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/js/cards.js"></script>
     <script src="/js/deck.js"></script>
     <script src="/js/shot.js"></script>

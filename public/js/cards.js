@@ -101,6 +101,16 @@ function createPutter() {
 }
 
 // ============================================
+// PRACTICE SWING (always in stroke with putter, cannot be removed)
+// ============================================
+function createPracticeSwing() {
+    return new CardData({
+        id: 'practice_swing', name: 'Practice Swing', type: CardType.POWER,
+        tags: ['power', 'modifier'], powerValue: 0.10
+    });
+}
+
+// ============================================
 // CARD DATABASE - 23 Starter Cards
 // ============================================
 function createStarterDeck() {

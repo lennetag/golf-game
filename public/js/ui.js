@@ -221,6 +221,42 @@ const CardReward = {
 };
 
 // ============================================
+// CHECKPOINT REWARD (yellow flag)
+// ============================================
+const CheckpointReward = {
+    isActive: false,
+    onComplete: null,
+    elements: null,
+
+    init(elements, onComplete) {
+        this.elements = elements;
+        this.onComplete = onComplete;
+        if (!this.elements?.choices) return;
+        this.elements.choices.querySelectorAll('[data-reward]').forEach(el => {
+            el.addEventListener('click', () => this.choose(el.dataset.reward));
+        });
+    },
+
+    show(strokeCount, checkpointLabel) {
+        this.isActive = true;
+        if (this.elements.title) this.elements.title.textContent = 'Checkpoint reached!';
+        if (this.elements.strokes) this.elements.strokes.textContent = `${checkpointLabel} in ${strokeCount} stroke${strokeCount !== 1 ? 's' : ''}. Choose a reward:`;
+        if (this.elements.overlay) this.elements.overlay.classList.add('active');
+    },
+
+    choose(rewardId) {
+        if (!this.onComplete) return;
+        this.hide();
+        this.onComplete(rewardId);
+    },
+
+    hide() {
+        this.isActive = false;
+        if (this.elements.overlay) this.elements.overlay.classList.remove('active');
+    }
+};
+
+// ============================================
 // SKILL CHALLENGE SYSTEM
 // ============================================
 const SkillChallenge = {

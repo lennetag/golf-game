@@ -325,7 +325,7 @@ function drawTeeBox(ctx, teeBox) {
     ctx.fillText('TEE', teeBox.x, teeBox.y);
 }
 
-function drawFlag(ctx, flag, holeRadius, celebration) {
+function drawFlag(ctx, flag, holeRadius, celebration, flagType = 'red') {
     ctx.fillStyle = '#1f2937';
     ctx.beginPath();
     ctx.arc(flag.x, flag.y, holeRadius + 2, 0, Math.PI * 2);
@@ -352,7 +352,8 @@ function drawFlag(ctx, flag, holeRadius, celebration) {
     ctx.lineTo(flag.x + 1, flag.y - poleHeight);
     ctx.stroke();
 
-    const flagColor = celebration.isActive ? celebration.currentFlagColor : '#dc2626';
+    const defaultFlagColor = flagType === 'yellow' ? '#eab308' : '#dc2626';
+    const flagColor = celebration.isActive ? celebration.currentFlagColor : defaultFlagColor;
     const flagWidth = 32;
     const flagHeight = 22;
     

@@ -4,6 +4,33 @@
 const GIMME_RADIUS = 0.04;
 const LONG_RUN_BONUS = 0.25;
 
+// Ball types: roll multiplier after landing (extensible for future balls)
+const BALL_TYPES = {
+    standard: { rollMultiplier: 1.0, name: 'Standard' },
+    spin: { rollMultiplier: 0.6, name: 'Spin' },
+    distance: { rollMultiplier: 1.25, name: 'Distance' }
+};
+
+function getBallRollMultiplier(ballType) {
+    const ball = BALL_TYPES[ballType || 'standard'];
+    return ball ? ball.rollMultiplier : 1.0;
+}
+
+// Roll-after-landing: base fraction of map per club (lower loft = more run)
+const CLUB_ROLL_FACTORS = {
+    putter: 0.005,
+    lob_wedge: 0.008,
+    sand_wedge: 0.01,
+    wedge: 0.015,
+    '9_iron': 0.02,
+    '7_iron': 0.03,
+    '5_iron': 0.04,
+    hybrid: 0.05,
+    '3_wood': 0.055,
+    driver: 0.06,
+    big_bertha: 0.065
+};
+
 class Shot {
     constructor() {
         this.clubName = '';
@@ -17,6 +44,7 @@ class Shot {
         this.hasLongRun = false;
         this.bounceDistance = 0;
         this.bounceCount = 0;
+        this.rollDistance = 0;
         this.isValid = false;
         this.errorMessage = '';
     }
@@ -41,14 +69,15 @@ Base Distance: ${(this.baseDistance * 100).toFixed(1)}% map
 Power Multiplier: ×${this.totalPower.toFixed(2)}
 Loft: ${this.loftScalar >= 0 ? '+' : ''}${this.loftScalar} (${loftEffect}, ×${loftDistMod.toFixed(2)})
 <strong>Final Distance: ${(this.finalDistance * 100).toFixed(1)}% map</strong>
-Bounce: ${this.bounceCount}× (~${(this.bounceDistance * 100).toFixed(1)}% total roll)
+Bounce: ${this.bounceCount}× (~${(this.bounceDistance * 100).toFixed(1)}% total)
+Roll: ~${(this.rollDistance * 100).toFixed(1)}% after landing
 Shape: ${shapeStr}
 Utilities: ${utilStr}
 ═════════════════════`;
     }
 }
 
-function calculateShot(strokeCards) {
+function calculateShot(strokeCards, ballType = 'standard') {
     const shot = new Shot();
 
     const clubs = strokeCards.filter(c => c.type === CardType.CLUB);
@@ -125,6 +154,16 @@ function calculateShot(strokeCards) {
         shot.bounceDistance *= 1.3;
         shot.bounceCount = Math.min(shot.bounceCount + 1, 4);
     }
+
+    // Roll after landing: f(club, trajectory height, ball type). More powerful (longer) clubs roll less.
+    const clubRollBase = CLUB_ROLL_FACTORS[shot.clubId] ?? 0.03;
+    const heightFactor = Math.max(0.6, 1.2 - shot.loftScalar * 0.3);
+    const ballMultiplier = getBallRollMultiplier(ballType);
+    const powerFactor = 0.7 + 0.5 * Math.min(shot.totalPower, 1.5);
+    shot.rollDistance = clubRollBase * heightFactor * ballMultiplier * powerFactor;
+    const powerClubRollReduction = Math.max(0.5, 1.25 - shot.baseDistance);
+    shot.rollDistance *= powerClubRollReduction;
+    if (shot.hasLongRun) shot.rollDistance *= 1.2;
 
     shot.isValid = true;
 
